@@ -1,0 +1,485 @@
+
+--- Page 1 ---
+📦 Welcome 
+
+--- Page 2 ---
+Welcome 
+Welcome to the documentation for modding STS2. This documentation will likely 
+change a lot as we enter and continue through Early Access. I dunno if the 
+community can contribute to this, but if not, we really should find a place to host 
+this that they can! 
+You can get started with your first mod here. 
+If you are very experienced, you probably want to read at least the modding 
+concepts, and then you can jump straight in by starting with the example mod 
+(also located in this drive folder). 
+Happy modding! 
+
+--- Page 3 ---
+🔧 Setup 
+
+--- Page 4 ---
+Setup 
+This document describes how to get set up to mod STS2. It assumes that you are 
+on Windows (for Visual Studio), but you can use alternative tools - just look 
+around for them. 
+Getting Started 
+●​ Install Visual Studio: https://visualstudio.microsoft.com 
+○​ Any C# IDE will work. The only reason we recommend Visual Studio 
+here is that the Community edition is free. 
+●​ Install the latest version of Megadot: https://megadot.megacrit.com 
+Setting up a Godot project 
+If you want a quick start, you may clone the example repo and start from there, 
+but these instructions will assume that you are starting from nothing. 
+●​ Open Godot and create a new project. 
+○​ Give your project a unique name. This name must be unique among 
+all STS2 mods! 
+●​ Create a directory with the name of your mod inside res://. 
+●​ Add a file called mod_manifest.json at the root, inside res://. 
+mod_manifest.json 
+Open the mod_manifest.json file in a text editor (Notepad or Visual Studio). 
+Copy the text below and paste it into the file, then edit the fields. 
+{​
+  "pck_name": "godot_project_name",​
+
+--- Page 5 ---
+  "name": "Mod Name",​
+  "author": "Mod Author",​
+  "description": "Some description of this mod.",​
+  "version": "v0.1"​
+} 
+Most of the fields can be whatever you want - they are displayed in-game in the 
+mod settings menu. The only one with a strict definition is pck_name, whose value 
+should match your Godot project's name. Later, you will export a .pck file, and 
+this value must exactly match the name of that file. 
+C# Project 
+To initialize the C# project, create a C# script inside res://. You can place this 
+script wherever you want. 
+ 
+Ensure that the language is set to C#, and that the path ends in .cs. 
+
+--- Page 6 ---
+ 
+After you have done this, you should have a .sln file inside your Godot project 
+directory. Open this using Visual Studio. You should be looking at a blank C# 
+project containing only your script. Not very exciting. To start programming a mod 
+targeting STS2, you have to do a couple of things. 
+In the Solution Explorer, right click the Dependencies of your C# project. Select 
+"Add Project Reference". 
+
+--- Page 7 ---
+ 
+At the bottom-right, select "Browse..." 
+
+--- Page 8 ---
+ 
+Navigate to the Slay the Spire 2 install directory. For Steam, this is usually 
+C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2. 
+Then, open the data_sts2_windows_x86_64 directory. 
+Select both sts2.dll and 0Harmony.dll, then hit "Add". You should now see 
+them in the "browse" section of the Reference Manager. Ensure they're both 
+checked on, then hit OK. 
+
+--- Page 9 ---
+ 
+Now, your code should have full access to the STS2 codebase, and you can start 
+creating your first mod. 
+ 
+
+--- Page 10 ---
+🎀 Your First Mod 
+
+--- Page 11 ---
+Your First Mod 
+This page describes how to create an example mod. A basic knowledge of C# will 
+be very helpful, but you should be able to follow this tutorial without it. 
+We'll add a single card to the game, "Super Strike", which deals 999 damage to all 
+enemies. Ensure you've followed the setup instructions first. 
+The CardModel 
+In STS2, each piece of content is represented by a Model. Whether it's cards, 
+powers, or monsters, they all have a bit of code associated with them. We'll start 
+by creating this code. 
+Start by creating a new C# file. You can do this in one of two ways: 
+●​ Create one in Godot: Right-click res://, Create New -> Script. 
+●​ Create one in Visual Studio: Right-click inside the Solution Explorer, Add -> 
+New Item. 
+Whichever way you do it, name the file SuperStrike.cs, and then open the file in 
+Visual Studio. 
+Now, we can start filling out our card code. We declare the SuperStrike class, 
+and make it inherit from CardModel, which is the base class for all cards in STS2. 
+public class SuperStrike : CardModel​
+{​
+} 
+You'll immediately see a red squiggle show up on SuperStrike. CardModel 
+enforces that the card implements some properties. To automatically get these 
+
+--- Page 12 ---
+properties, you can hit Alt + Enter on SuperStrike, then select "Implement 
+Abstract Class". It'll generate a bunch of overridden properties. 
+These properties should be pretty familiar if you have played STS2. You can 
+specify a card type (Attack, Skill, or Power); you can specify a Rarity (Common, 
+Uncommon, or Rare), and so on. For our purposes, let's make a cost 0 common 
+attack that targets a single enemy. 
+public class SuperStrike : CardModel​
+{​
+    public override CardType Type => CardType.Attack;​
+    public override CardRarity Rarity => CardRarity.Common;​
+    protected override int CanonicalEnergyCost => 0;​
+    public override TargetType TargetType => TargetType.AnyEnemy;​
+} 
+The card properties are now defined, and the code will compile. However, the 
+card still doesn't have any behavior associated with it. We need to tell the game 
+what to do when the card is played. To define this behavior, we must override the 
+OnPlay function. 
+   protected override async Task OnPlay(PlayerChoiceContext 
+choiceContext, Creature target)​
+    {​
+    } 
+The code inside OnPlay is executed when the card is played. In general, models 
+will execute Commands inside their functions. Since we want to deal damage to 
+the target, we will use a DamageCmd. 
+    protected override async Task OnPlay(PlayerChoiceContext 
+choiceContext, Creature target)​
+    {​
+        await DamageCmd.Attack(999, 1)​
+
+--- Page 13 ---
+            .FromCard(this)​
+            .Targeting(target)​
+            .WithHitFx(VfxCmd.bluntPath, tmpSfx: TmpSfx.heavyAttack)​
+            .Execute();​
+    } 
+You may have to hit Alt + Enter on DamageCmd and select using 
+MegaCrit.Sts2.Core.Commands. 
+This DamageCommand specifies that, when the card is played, it deals 999 damage 
+once to the target creature. In addition, the "blunt impact" VFX will be played, and 
+the "heavy attack" sound effect will be played. 
+That does it for our card model, but we need one more piece of code before we 
+can move on. 
+Adding Super Strike to a Card Pool 
+Card pools define when a card is generated. For example, each character has a 
+card pool which restricts the cards that get generated by end-of-combat rewards, 
+and by potions like the Attack Potion. There are other card pools, too, like the 
+colorless card pool, which dictates the cards that are generated at the Merchant's 
+colorless card slots, or from the Colorless Potion. 
+We have created our Super Strike card, but it's not currently in any card pools, 
+which means it won't show up in the game anywhere. Let's add it to the Ironclad 
+card pool so that it has a chance to show up if you're the Ironclad and you're 
+receiving rewards. 
+Add a new file to the mod project called CardPoolPatch.cs. Within it, declare a 
+class called CardPoolPatch. 
+
+--- Page 14 ---
+public class CardPoolPatch ​
+{​
+} 
+We've called it a "patch" because we will be using the Harmony library to modify 
+the existing STS2 code which generates the Ironclad's card pool. We'll intercept 
+the pool generation and append our card to the end of the pool. 
+To tell Harmony what method to patch, place this attribute at the top, just before 
+the class declaration: 
+[HarmonyPatch(typeof(IroncladCardPool), "GenerateCards")] 
+This tells Harmony that we want to patch the GenerateCards method of the 
+IroncladCardPool class, which exists within the STS2 codebase. 
+Then, within the class, we declare the Postfix method, which runs after the 
+GenerateCards method: 
+   static CardModel[] Postfix(CardModel[] values)​
+    {​
+        return 
+values.Concat([ModelDb.Card<SuperStrike>()]).ToArray();​
+    } 
+You may have to hit Alt + Enter on Concat and select using 
+System.Linq. 
+In the above method, values contains the original cards in the Ironclad card pool. 
+In our patch, we are adding the SuperStrike card to the card pool and returning 
+a new array, modifying the card pool. 
+For more information on what is possible with Harmony patches, refer to the 
+Harmony documentation. 
+
+--- Page 15 ---
+Card Resources 
+We're done with the code part of the mod now. However, if we were to run this 
+mod as-is, the game would be broken whenever the card showed up. This is 
+because we have not supplied the necessary resources to display the card 
+correctly. For example, the game still doesn't know what image to display in the 
+card portrait, or the description to show in the card frame. 
+These resources are supplied as part of the PCK file, which is exported by Godot. 
+When exporting your mod, Godot takes the entire res:// directory and packs it 
+into a PCK file. When this PCK file is loaded by STS2, it takes all of those files and 
+places it in its own res:// directory, making them accessible to the game. 
+For our card, we need two resources: a card portrait, and a localization file. Let's 
+start by creating the card portrait. 
+Card Portrait 
+Create a new directory inside Godot: 
+res://images/packed/card_portraits/ironclad. Then, create a 500x380 
+PNG named super_strike.png in that directory. Draw whatever you want in 
+there! 
+Simple as that - the image will now be used as the portrait for our new card. 
+Advanced: How does the game know where to find the PNG? 
+You may have noted that we didn't reference the above path in our card 
+anywhere. STS2 has default, standardized paths for pretty much every 
+resource referenced by each piece of content. In the case of cards, 
+portraits are always at 
+res://images/packed/card_portraits/<card_pool>/<snake_ca
+
+--- Page 16 ---
+sed_name>.png. This can be overridden in the CardModel by 
+overriding the PortraitPath property. 
+Card Title and Description 
+Now, let's set the title and description for our new card. 
+Start by creating a new directory: 
+res://<project_name>/localization/eng/. The <project_name> portion of 
+the path should be the same as your Godot project name, and match the 
+pck_name declared in the mod_manifest.json you created in the Modding Setup 
+step. 
+In this directory, create a file named cards.json. Edit the file (using notepad or 
+Visual Studio) and place the following text inside the file: 
+{​
+  "SUPER_STRIKE.description": "Deal an [sine]incredible[/sine] 
+{Damage:diff()} damage!!!",​
+  "SUPER_STRIKE.title": "Super Strike"​
+} 
+This tells your card to display "Super Strike" as its title, and the description as the 
+text within the bottom of the card frame. 
+Advanced: Why use {Damage:diff()} to display the card’s damage? 
+When cards are in play, they often have damage values different from 
+the number printed on the card - for example, when an Attack card has 
+its damage increased by Strength. By using the {Damage:diff()} 
+shorthand, the game automatically transforms this text into the 
+appropriate calculated value for the card. 
+Advanced: Why is cards.json inside the <project_name> folder? 
+
+--- Page 17 ---
+Each mod can have a cards.json file, and they must exist 
+independently. Since all mods' resources are merged together when 
+loaded into the base game, we must scope these files to the mod, 
+rather than placing them directly in the res:// directory. 
+Testing the Mod 
+That completes our construction of the mod's files. To test your mod, you should 
+follow the steps to export your mod. 
+Make sure you read the document above for the full steps, but the general idea is 
+this: 
+●​ Export a PCK from Godot 
+●​ Export a DLL from Visual Studio 
+●​ Make a mods directory next to SlayTheSpire2.exe 
+●​ Copy the PCK and DLL into the mods directory 
+Once you have exported your mod, open STS2, and open the compendium. You 
+should see your card displayed among the other Ironclad cards! 
+
+--- Page 18 ---
+ 
+Troubleshooting 
+If you're having trouble getting your mod to function correctly, make sure to take a 
+look at the logs for STS2. You can find them by: 
+●​ Opening the console by pressing the ` (~) key 
+●​ Typing "open logs" 
+●​ Pressing enter 
+This will open a folder that contains a file called godot.log. Open this file. Since 
+mods are loaded very early on in the application's lifetime, take a look at the top of 
+the log and see if there are any errors or warnings related to your mod. 
+ 
+
+--- Page 19 ---
+📄 Modding Concepts 
+
+--- Page 20 ---
+Modding Concepts 
+Mod Structure 
+A mod for STS2 consists of the following: 
+●​ A PCK file generated by Godot which contains resources (images, sound) 
+that your mod needs to function. It is loaded using 
+ProjectSettings.LoadResourcePack. 
+●​ A DLL file generated by a C# compiler which contains code that will be 
+executed with the game. 
+Cards, characters and other content are represented by code in STS2. That code 
+modifies game state (player health), and can also reference resources (images, 
+sound) which will be used to display the content. 
+How a Mod is Loaded 
+Presence Check 
+When the game starts up, it checks the mods directory next to the EXE for any 
+PCK files. It assumes one PCK file per mod. 
+C# DLL loading 
+If there's a PCK file, then it checks for a C# DLL with the same name, and loads it. 
+Your C# DLL is loaded by the game using Assembly.Load (... not exactly, but 
+close enough). This happens before the PCK is loaded, in case you have any 
+objects inside the PCK which reference C# scripts. 
+
+--- Page 21 ---
+This step is optional. You can have a mod that only has a PCK, and that's ok - but 
+you can't have a DLL with no PCK. 
+PCK loading 
+After the C# DLL is loaded, then the PCK is loaded using 
+ProjectSettings.LoadResourcePack. This essentially dumps all the resources 
+located in the PCK into the STS2 res:// directory. Then we validate the 
+mod_manifest.json inside the PCK looks as we expect. 
+To learn more about the res:// directory in Godot, read the Resources page in 
+their documentation. And if you want to learn more about how the PCK is loaded, 
+they have a page on that too. 
+An important thing to keep in mind is that resources at the same path are replaced 
+by those in your PCK. That means you can do things like replace existing textures 
+in the game, but it also means that other mods might accidentally overwrite the 
+changes that you make. And it means that you need to be careful what you name 
+your files; for instance, if you created the file localization/eng/cards.json, 
+you would wipe all the base card text from the game. This is why your mod's 
+cards.json must be scoped under the folder named after your mod's pck name. 
+C# Mod Initialization 
+Finally, now that everything is loaded, we call the mod initializer. This is declared 
+using the ModInitializerAttribute, which provides the name of a static 
+method to be called at this point. The method must be a static method that returns 
+void. For example, we could do the following to initialize our Harmony patches 
+manually: 
+[ModInitializer(nameof(InitializeMod))]​
+
+--- Page 22 ---
+public static class ModInitializer​
+{​
+    public static void InitializeMod()​
+    {​
+        Harmony harmony = new("chaosed0.sts2examplemod");​
+​
+        // Example of manual patch​
+        MethodInfo ironcladCardPoolGeneration =​
+            typeof(IroncladCardPool).GetMethod("GenerateCards", 
+BindingFlags.Instance | BindingFlags.NonPublic);​
+        HarmonyMethod postfix = 
+typeof(CardPoolPatch).GetMethod(nameof(CardPoolPatch.InjectSuperStrik
+e));​
+        harmony.Patch(ironcladCardPoolGeneration, postfix: postfix);​
+        ​
+        // Do attribute-style patches too​
+        harmony.PatchAll();​
+    }​
+} 
+Note that this mod initializer is optional. If it is not specified, STS2 will create its 
+own Harmony instance and call Harmony.PatchAll on the mod assembly. This 
+limits you to using attribute-style patches, but is sufficient for most simple patches 
+(e.g. adding content to pools). 
+Harmony.PatchAll is not called for you if you declare your own mod initializer, 
+so make sure to do it yourself if you need it. 
+
+--- Page 23 ---
+📦 Exporting Mods 
+
+--- Page 24 ---
+Exporting Mods 
+This page describes how to export a mod after you've finished constructing it. 
+Pre-export checklist 
+●​ You should have a mod_manifest.json. 
+●​ The id inside mod_manifest.json should match your mod-scoped folder 
+inside res:// 
+●​ The pck_name inside mod_manifest.json should match the name of your 
+Godot project. 
+●​ Your json files containing your model text data should be inside your 
+mod-scoped folder (named with your id). 
+Export the PCK 
+In Godot, open the Export dialog by going to the top bar, and hitting Project -> 
+Export. It should open this dialog. 
+
+--- Page 25 ---
+ 
+If you have no Presets in the left side, you most likely need to download the Godot 
+export templates. First, Follow the official Godot instructions for installing export 
+templates, then click "Add..." at the top and add a preset for your platform. 
+What platform should I use? This is an open question. I'm unsure if it 
+matters what platform you use. Some reading I did says that any 
+platform should work, and your mod should work across all platforms, 
+but we have to experiment and see if that is, in fact, true. 
+After you have an export preset, select "Export PCK/ZIP". Do not select "Export 
+Project" - that is for executable files. You are exporting a mod. 
+
+--- Page 26 ---
+Select a place to put the PCK file. if you're testing your mod, a good place to put 
+this is in a mods directory next to the SlayTheSpire2.exe, where it will get 
+picked up by your local installation. 
+Once the PCK file is exported, you must also export your C# DLL. 
+Export the DLL 
+Remember that the PCK contains only the resources for your mod, not your code. 
+To include your code with the mod, you must export the DLL as well, next to the 
+PCK file. 
+The instructions below are for Visual Studio, but if you are using 
+another IDE, all you need is a way to get access to the DLL exported by 
+the build process. Copy that DLL next to the PCK file and you should be 
+good to go. 
+In Visual Studio, right-click your project (not the solution) and select "Publish". 
+Then click "add a publish profile". The dialog below should open. 
+
+--- Page 27 ---
+ 
+Select "Folder", and select the folder where you published the PCK file. Then hit 
+"Finish." This creates a new publishing profile. 
+Finally, click the "Publish" button. 
+ 
+
+--- Page 28 ---
+This should place a DLL with the name of your mod next to the PCK file. 
+Final checks 
+●​ Delete everything except for your PCK and the DLL with the name of your 
+mod. Visual Studio will publish a lot of other files alongside your DLL, but 
+unless you have a good reason for including them, they will only bloat the 
+size of your final mod. 0Harmony.dll and Sts2.dll are provided by the 
+host application. 
+●​ Ensure that the DLL and the PCK share the same name. On Windows, they 
+can be differently-cased, but other platforms are not so lenient, so ensure 
+that their casing is also the same. 
+Testing your mod 
+Copy the PCK and the DLL file to the mods directory next to the 
+SlayTheSpire2.exe. Create the directory if necessary. 
+Now, you can run the game. If this is your first time running the game with mods, 
+you should see this dialog: 
+
+--- Page 29 ---
+ 
+Press “Load Mods”. The game will quit, and you will have to relaunch the game. 
+Afterwards, you should see this small text at the bottom-right: 
+ 
+Troubleshooting 
+If you're having trouble getting your mod to load or function correctly, make sure 
+to take a look at the logs for STS2. You can find them by: 
+●​ Opening the console by pressing the ` (~) key 
+●​ Typing "open logs" 
+●​ Pressing enter 
+
+--- Page 30 ---
+This will open a folder that contains a file called godot.log. Open this file. Since 
+mods are loaded very early on in the application's lifetime, take a look at the top of 
+the log. A typical pattern for successful mod loading looks like this: 
+[INFO] Found mod pck file C:/godot/godot/mods/sts2mod.pck​
+[INFO] Loading assembly DLL sts2mod.dll​
+[INFO] Running Harmony patches in Sts2Mod, Version=1.0.0.0, 
+Culture=neutral, PublicKeyToken=null​
+[INFO] Mod Example Mod initialized, ID: chaosed0.sts2examplemod​
+[INFO]  --- RUNNING MODDED! --- 1 mods 
+If you don't see this, or if you see errors related to your mod, then that's the thing 
+to fix. 
+ 
+
+--- Page 31 ---
+👓 Finding Info about 
+Models 
+
+--- Page 32 ---
+Finding Info about Models 
+Since this will change a lot as STS2 continues development, I think it's not worth 
+creating documentation on how each model type works yet. Once STS2 hits Early 
+access, it might be worth putting this data in a place where people less 
+experienced with code can find it. 
+You can view the decompiled versions of base models using Visual Studio by 
+right-clicking the STS2 assembly in the Solution Explorer, then selecting “View in 
+Object Browser”: 
+ 
+Then, you can navigate to the MegaCrit.Sts2.Core.Models namespace in the 
+left side of the object browser: 
+
+--- Page 33 ---
+ 
+By double-clicking on the model you're interested in, you can see the code for 
+that model. This will give you a hint towards the resource paths, localization text 
+keys, and so on that the model expects. For example, in the RelicModel, you can 
+see that it expects a text key of <entry>.title in a loc table called relics 
+(which means you need a relics.json): 
+ 
+And the fallback path for its icon (fallback because you can't texture pack into the 
+STS2 atlas) should be located at res://images/relics/<entry>.png: 
+
+--- Page 34 ---
+ 
+ 

@@ -1,0 +1,9 @@
+{
+  "Name": "STS2 AI Bot",
+  "Tag": "AI",
+  "Version": "0.1.0",
+  "Detail": "Reinforcement Learning AI",
+  "Remark": "Automatically plays Slay the Spire 2 using a trained PPO agent.",
+  "Author": "sts2aibot",
+  "Description": "A hierarchical RL-based AI mod that reads game state and makes decisions using a trained neural network."
+}

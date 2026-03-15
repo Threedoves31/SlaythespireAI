@@ -1,0 +1,7 @@
+{
+  "pck_name": "STS2AIBot",
+  "name": "STS2 AI Bot",
+  "author": "sts2aibot",
+  "description": "Reinforcement learning AI that automatically plays Slay the Spire 2.",
+  "version": "v0.1"
+}

@@ -1,0 +1,5 @@
+E:\Programs\Slaythespire\mod\STS2AIBot\obj\Debug\net8.0\STS2AIBot.csproj.AssemblyReference.cache
+E:\Programs\Slaythespire\mod\STS2AIBot\obj\Debug\net8.0\STS2AIBot.GeneratedMSBuildEditorConfig.editorconfig
+E:\Programs\Slaythespire\mod\STS2AIBot\obj\Debug\net8.0\STS2AIBot.AssemblyInfoInputs.cache
+E:\Programs\Slaythespire\mod\STS2AIBot\obj\Debug\net8.0\STS2AIBot.AssemblyInfo.cs
+E:\Programs\Slaythespire\mod\STS2AIBot\obj\Debug\net8.0\STS2AIBot.csproj.CoreCompileInputs.cache
