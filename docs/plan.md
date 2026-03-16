@@ -231,3 +231,93 @@ class CombatEnv(gymnasium.Env):
 ## 当前第一步
 
 创建 conda 环境 + 项目目录结构 + 开始逆向 sts2.dll。
+
+---
+
+## 进度更新 (2026-03-16)
+
+### ✅ 已完成
+
+| Phase | 状态 | 说明 |
+|-------|------|------|
+| **Phase 1: 环境搭建** | ✅ 完成 | conda 环境 `sts` 已创建，项目目录结构已建立 |
+| **Phase 1: 逆向分析** | ✅ 完成 | tools/ 目录包含反编译的 C# 文件，已识别关键类 |
+| **Phase 2: C# Mod** | ✅ 大部分完成 | 状态提取、补丁、启发式 AI、通信模块已完成 |
+| **Phase 3: 模拟器** | ✅ 基本完成 | 战斗系统、卡牌、玩家、敌人、Power 系统已实现 |
+| **Phase 4: RL 训练** | ⏳ 部分完成 | 实际游戏训练环境就绪，模拟器环境待完善 |
+| **Phase 5: 整合** | ⏳ 待开始 | ONNX 导出 + Mod 整合 |
+
+### 关键发现（逆向分析）
+
+已通过分析 `sts2.dll` 确认以下关键类和方法：
+
+**核心类：**
+- `CombatManager` - 战斗管理，`Instance.IsInProgress`, `Instance.IsPlayPhase`
+- `RunManager` - 游戏运行状态，`DebugOnlyGetState()`
+- `Player` - 玩家实体，`Creature`, `PlayerCombatState`, `MaxEnergy`
+- `Creature` - 玩家和敌人的公共基类
+- `CardModel` - 卡牌基类，`OnPlay(PlayerChoiceContext, Creature target)`
+- `MonsterModel` - 敌人模型，`NextMove.Intents`
+- `PileType` - 牌堆类型：`Hand`, `Draw`, `Discard`, `Exhaust`
+
+**命令系统：**
+- `CardCmd.AutoPlay()` - 自动出牌
+- `PlayerCmd.EndTurn()` - 结束回合
+- `DamageCmd.Attack()` - 伤害命令
+- `BlockingPlayerChoiceContext` - 阻塞式玩家选择上下文
+
+### 已实现功能
+
+**C# Mod (`mod/STS2AIBot/`)：**
+- ✅ `ModEntry.cs` - Mod 入口，Harmony 补丁初始化
+- ✅ `GameStateReader.cs` - 完整战斗状态提取（玩家、手牌、敌人、Powers、意图）
+- ✅ `CombatHook.cs` - 回合开始拦截，启发式 AI 自动出牌
+- ✅ `PipeServer.cs` - 命名管道服务器（与 Python 通信）
+- ✅ `GameEnvironment.cs` - 训练环境管理（状态序列化、动作执行、奖励计算）
+
+**Python 模拟器 (`simulator/core/`)：**
+- ✅ `combat.py` - 核心战斗系统
+- ✅ `card.py` - 卡牌定义（含铁甲战士 ~60+ 张卡牌）
+- ✅ `player.py` - 玩家状态管理
+- ✅ `enemy.py` - 敌人 AI 和意图系统
+- ✅ `power.py` - Buff/Debuff 系统
+
+**RL 训练 (`training/`)：**
+- ✅ `real_game_env.py` - 实际游戏 Gymnasium 环境
+- ✅ `train_real_game.py` - MaskablePPO 训练脚本
+- ✅ 命名管道通信机制
+- ✅ Action Masking 支持
+- ⏳ `combat_env.py` - 模拟器环境（待完善）
+
+### 待完成任务
+
+**优先级 1 - 完善训练流程：**
+1. ✅ 实际游戏训练环境已就绪
+2. ⏳ 完善 `simulator/env/combat_env.py`（用于快速训练）
+3. ⏳ 实现 ONNX 模型导出 (`training/export_onnx.py`)
+4. ⏳ 实现 C# Mod 中的 ONNX 推理 (`mod/STS2AIBot/AI/OnnxInference.cs`)
+
+**优先级 2 - Meta Agent：**
+1. ⏳ 卡牌奖励决策
+2. ⏳ 地图路径选择
+3. ⏳ 商店/事件决策
+
+**优先级 3 - 扩展：**
+1. ⏳ 支持其他角色（Silent, Defect 等）
+2. ⏳ Act 2/3 敌人
+3. ⏳ 更多遗物系统
+
+### 下一步建议
+
+1. **测试实际游戏训练：**
+   - 启动 STS2 并加载 Mod
+   - 进入战斗后运行 `python training/train_real_game.py --steps 1000`
+   - 验证通信和基本训练流程
+
+2. **完善模拟器环境：**
+   - 将模拟器连接到 Gymnasium 接口
+   - 支持快速并行训练（vs 实际游戏的串行训练）
+
+3. **实现 ONNX 导出和推理：**
+   - 训练完成后导出模型
+   - 在 Mod 中加载并执行推理
