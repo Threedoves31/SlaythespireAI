@@ -7,6 +7,7 @@ using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
@@ -115,7 +116,7 @@ public static class CombatHook
 
             // Read combat state
             var snapshot = GameStateReader.TryRead();
-            if (snapshot != null)
+            if (snapshot == null)
             {
                 Log.Info("[CombatHook] Failed to read combat state");
                 return;
@@ -123,6 +124,13 @@ public static class CombatHook
 
             // Update debug window with initial state
             _debugWindow?.Update(snapshot, null, _turnCount);
+
+            // Use potions before playing cards
+            await UsePotionsAsync(player, snapshot);
+
+            // Refresh state after potions
+            snapshot = GameStateReader.TryRead();
+            if (snapshot == null) return;
 
             // Play cards until decision says to end
             int cardsPlayed = 0;
@@ -194,7 +202,7 @@ public static class CombatHook
                 bool turnSuccessful = finalSnapshot.PlayerHp > _previousPlayerHp ||
                                     !finalSnapshot.Enemies.Any(e => e.Hp > 0);
                 _decisionEngine?.RecordDecision(
-                    new Decision(DecisionEngine.ActionType.EndTurn, null, null, 0f, "Turn ended"),
+                    new DecisionEngine.Decision(DecisionEngine.ActionType.EndTurn, null, null, 0f, "Turn ended"),
                     finalSnapshot,
                     turnSuccessful
                 );
@@ -224,6 +232,45 @@ public static class CombatHook
         {
             await Task.Delay(100);
             waited++;
+        }
+    }
+
+    private static async Task UsePotionsAsync(Player player, CombatSnapshot snapshot)
+    {
+        if (_decisionEngine == null) return;
+
+        var combatState = player.Creature.CombatState;
+        if (combatState == null) return;
+
+        // Keep asking DecisionEngine until no more potions should be used
+        while (CombatManager.Instance.IsPlayPhase && CombatManager.Instance.IsInProgress)
+        {
+            var potionDecision = _decisionEngine.ConsiderPotion(snapshot);
+            if (potionDecision == null) break;
+
+            var potionInfo = potionDecision.Potion!;
+            var potion = player.Potions.FirstOrDefault(p => p.Id.Entry == potionInfo.Id);
+            if (potion == null) break;
+
+            Creature? target = potionInfo.TargetType switch
+            {
+                "AnyEnemy" => combatState.HittableEnemies.OrderBy(e => e.CurrentHp).FirstOrDefault(),
+                "AnyAlly" or "AnyPlayer" or "Self" => player.Creature,
+                _ => null
+            };
+
+            if (target == null && potion.TargetType.IsSingleTarget())
+            {
+                Log.Info($"[CombatHook] Skipping potion {potionInfo.Id}: no valid target");
+                break;
+            }
+
+            Log.Info($"[CombatHook] Using potion: {potionInfo.Id} -> {target?.Monster?.Id.Entry ?? "none"} | {potionDecision.Reason}");
+            potion.EnqueueManualUse(target);
+            await Task.Delay(300);
+
+            // Refresh snapshot to re-evaluate
+            snapshot = GameStateReader.TryRead() ?? snapshot;
         }
     }
 

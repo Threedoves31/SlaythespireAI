@@ -7,6 +7,7 @@ using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Logging;
@@ -31,6 +32,15 @@ public record EnemyInfo(
 /// Snapshot of a power/buff/debuff.
 /// </summary>
 public record PowerInfo(string Id, int Amount);
+
+/// <summary>
+/// Snapshot of a potion in the player's inventory.
+/// </summary>
+public record PotionInfo(
+    string Id,
+    int SlotIndex,
+    string TargetType  // "AnyEnemy", "Self", "AnyAlly", "AnyPlayer", "None"
+);
 
 /// <summary>
 /// Snapshot of a card in hand/draw/discard.
@@ -61,6 +71,9 @@ public class CombatSnapshot
     public int DrawPileCount { get; set; }
     public int DiscardPileCount { get; set; }
     public int ExhaustPileCount { get; set; }
+
+    // Potions
+    public List<PotionInfo> Potions { get; set; } = new();
 
     // Enemies
     public List<EnemyInfo> Enemies { get; set; } = new();
@@ -126,6 +139,7 @@ public static class GameStateReader
                 ExhaustPileCount = PileType.Exhaust.GetPile(player).Cards.Count,
                 Hand    = ReadHand(player),
                 Enemies = ReadEnemies(combatState),
+                Potions = ReadPotions(player),
             };
 
             return snapshot;
@@ -214,5 +228,17 @@ public static class GameStateReader
         return creature.Powers
             .Select(p => new PowerInfo(p.Id.Entry, p.Amount))
             .ToList();
+    }
+
+    private static List<PotionInfo> ReadPotions(Player player)
+    {
+        return player.PotionSlots
+            .Select((potion, index) => potion == null ? null : new PotionInfo(
+                Id:         potion.Id.Entry,
+                SlotIndex:  index,
+                TargetType: potion.TargetType.ToString()
+            ))
+            .Where(p => p != null)
+            .ToList()!;
     }
 }

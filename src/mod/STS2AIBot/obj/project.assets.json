@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "E:\\Programs\\Slaythespire\\mod\\STS2AIBot\\STS2AIBot.csproj",
+      "projectUniqueName": "E:\\Programs\\SlaythespireAI\\src\\mod\\STS2AIBot\\STS2AIBot.csproj",
       "projectName": "STS2AIBot",
-      "projectPath": "E:\\Programs\\Slaythespire\\mod\\STS2AIBot\\STS2AIBot.csproj",
+      "projectPath": "E:\\Programs\\SlaythespireAI\\src\\mod\\STS2AIBot\\STS2AIBot.csproj",
       "packagesPath": "C:\\Users\\Lenovo\\.nuget\\packages\\",
-      "outputPath": "E:\\Programs\\Slaythespire\\mod\\STS2AIBot\\obj\\",
+      "outputPath": "E:\\Programs\\SlaythespireAI\\src\\mod\\STS2AIBot\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\Lenovo\\AppData\\Roaming\\NuGet\\NuGet.Config"

@@ -1,5 +1,4 @@
 using System;
-using MegaCrit.Sts2.Core.Input;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIBot.AI;
 
@@ -25,9 +24,6 @@ public class AIController
     public void Initialize()
     {
         if (_initialized) return;
-
-        // Register keyboard hooks
-        InputManager.Instance.OnKeyPressed += OnKeyPressed;
         _initialized = true;
 
         Log.Info("[AIController] Initialized - Press F1 for commands");

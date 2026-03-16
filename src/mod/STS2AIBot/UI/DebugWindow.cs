@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIBot.AI;
 using STS2AIBot.StateExtractor;
+using static STS2AIBot.AI.DecisionEngine;
 
 namespace STS2AIBot.UI;
 
@@ -137,7 +139,7 @@ public class DebugWindow
         }
         if (_lastDecision.Target != null)
         {
-            Log.Info($"    Target: {_lastDecision.Target.Id} (HP: {_lastDecision.Target.CurrentHp})");
+            Log.Info($"    Target: {_lastDecision.Target.Id} (HP: {_lastDecision.Target.Hp})");
         }
         Log.Info($"    Score: {_lastDecision.Score:F2}");
     }
@@ -209,7 +211,7 @@ public class DebugWindow
             TotalActions = _actionLog.Count,
             TurnNumber = _turnCount,
             Ratings = _ratings.ToList(),
-            AverageRating = _ratings.Count > 0 ? _ratings.Average(r => r.Stars) : 0f
+            AverageRating = _ratings.Count > 0 ? (float)_ratings.Average(r => r.Stars) : 0f
         };
     }
 
