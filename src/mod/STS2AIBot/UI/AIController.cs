@@ -12,7 +12,7 @@ public class AIController
 {
     private DebugWindow? _debugWindow;
     private DecisionEngine? _decisionEngine;
-    private DecisionEngine.DecisionStrategy _currentStrategy = DecisionEngine.DecisionStrategy.SimpleHeuristic;
+    private DecisionEngine.DecisionStrategy _currentStrategy = DecisionEngine.DecisionStrategy.Simulation;
     private bool _initialized = false;
 
     public AIController(DebugWindow debugWindow, DecisionEngine decisionEngine)
