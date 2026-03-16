@@ -73,7 +73,6 @@ public class PipeServer : IDisposable
     // Event handlers
     public event Action<string>? OnResetRequested;
     public event Action<int>? OnStepRequested;
-    public event Action? OnGetActionMaskRequested;
     public event Action? OnCloseRequested;
 
     // Callbacks for responses
@@ -236,7 +235,7 @@ public class PipeServer : IDisposable
 
     public void SendDone(bool won, int turns, int hpRemaining)
     {
-        if (!IsConnected) return;
+        if (!IsConnected || _pipe == null) return;
 
         var doneJson = $"{{\"won\":{won.ToString().ToLower()},\"turns\":{turns},\"hp_remaining\":{hpRemaining}}}";
         var msg = new PipeMessage(MessageCommand.DONE, doneJson);

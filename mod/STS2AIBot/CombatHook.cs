@@ -12,6 +12,7 @@ using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 using STS2AIBot.StateExtractor;
+using STS2AIBot.Communication;
 
 namespace STS2AIBot;
 
@@ -22,19 +23,35 @@ namespace STS2AIBot;
 public static class CombatHook
 {
     private static bool _isRunning = false;
+    private static GameEnvironment? _gameEnv;
 
     public static void Register()
     {
         CombatManager.Instance.TurnStarted += OnTurnStarted;
-        Log.Info("[STS2AIBot] CombatHook registered");
+        Log.Info("[STS2AIBot] CombatHook registered (heuristic mode)");
+    }
+
+    public static void Register(GameEnvironment gameEnv)
+    {
+        _gameEnv = gameEnv;
+        CombatManager.Instance.TurnStarted += OnTurnStarted;
+        Log.Info("[STS2AIBot] CombatHook registered (training mode)");
     }
 
     private static void OnTurnStarted(CombatState state)
     {
         // Only act on player turns
         if (state.CurrentSide != CombatSide.Player) return;
-        if (_isRunning) return;
 
+        // Training mode: notify game environment
+        if (_gameEnv != null)
+        {
+            _gameEnv.OnTurnStarted();
+            return;
+        }
+
+        // Heuristic mode (original code)
+        if (_isRunning) return;
         _isRunning = true;
         // Fire-and-forget async task — same pattern as AutoSlayer
         var task = PlayTurnAsync(state);

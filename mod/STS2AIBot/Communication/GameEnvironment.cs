@@ -2,12 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Logging;
@@ -206,7 +209,7 @@ public class GameEnvironment
                 snapshot.DrawPileCount,
                 snapshot.DiscardPileCount,
                 snapshot.ExhaustPileCount,
-                SerializeEnemies(snapshot.Enemies, state.Enemies),
+                SerializeEnemies(snapshot.Enemies, state.Enemies.ToList()),
                 isDone,
                 _waitingForAction,
                 isDone ? (won ? REWARD_WIN : REWARD_LOSS) : reward,
@@ -406,10 +409,10 @@ public class GameEnvironment
             var runState = RunManager.Instance.DebugOnlyGetState();
             if (runState != null)
             {
-                var player = LocalContext.GetMe(runState);
-                if (player != null)
+                var playerEntity = LocalContext.GetMe(runState);
+                if (playerEntity != null)
                 {
-                    won = player.Creature.CurrentHp > 0;
+                    won = playerEntity.Creature.CurrentHp > 0;
                 }
             }
             return true;
@@ -421,8 +424,9 @@ public class GameEnvironment
             return true;
         }
 
-        var player = combatState.Player;
-        if (player != null && player.CurrentHp <= 0)
+        // Check player HP from snapshot
+        var snapshot = GameStateReader.TryRead();
+        if (snapshot != null && snapshot.PlayerHp <= 0)
         {
             won = false;
             return true;
@@ -452,7 +456,7 @@ public class GameEnvironment
         return result;
     }
 
-    private List<EnemyData> SerializeEnemies(List<EnemyInfo> enemies, List<Creature> combatEnemies)
+    private List<EnemyData> SerializeEnemies(List<EnemyInfo> enemies, List<MegaCrit.Sts2.Core.Entities.Creatures.Creature> combatEnemies)
     {
         var result = new List<EnemyData>();
         for (int i = 0; i < MAX_ENEMIES; i++)

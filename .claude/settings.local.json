@@ -1,4 +1,9 @@
 {
+  "env": {
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.7",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5"
+  },
   "permissions": {
     "allow": [
       "WebSearch",
@@ -9,12 +14,8 @@
       "Bash(python -c \"import importlib; print\\(importlib.import_module\\(''PyMuPDF''\\)\\)\")",
       "Bash(python -c \"import fitz; print\\(''fitz works''\\)\")",
       "Bash(python -c \"import pymupdf; print\\(''pymupdf works''\\)\")",
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "Bash(dotnet:*)"
     ]
-  },
-  "env": {
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.7",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5"
   }
 }
