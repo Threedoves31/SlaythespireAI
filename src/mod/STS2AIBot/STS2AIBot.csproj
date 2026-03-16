@@ -7,6 +7,20 @@
     <RootNamespace>STS2AIBot</RootNamespace>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <Version>1.3.6</Version>
+  </PropertyGroup>
+
+  <Target Name="GitVersion" BeforeTargets="BeforeBuild">
+    <Exec Command="git describe --tags --always" ConsoleToMSBuild="true" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitTag" />
+    </Exec>
+    <PropertyGroup>
+      <InformationalVersion Condition="'$(GitTag)' != ''">$(GitTag)</InformationalVersion>
+      <InformationalVersion Condition="'$(GitTag)' == ''">$(Version)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+
   <ItemGroup>
     <Reference Include="sts2">
       <HintPath>references\sts2.dll</HintPath>

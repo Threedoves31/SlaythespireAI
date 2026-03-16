@@ -2,6 +2,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Modding;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIBot.Communication;
+using System.Reflection;
 
 namespace STS2AIBot;
 
@@ -15,7 +16,9 @@ public static class ModEntry
     {
         var harmony = new Harmony("sts2aibot");
         harmony.PatchAll();
-        Log.Info("[STS2AIBot] STS2 AI Bot initialized");
+        var version = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
+        Log.Info($"[STS2AIBot] STS2 AI Bot v{version} initialized");
 
         // Initialize training environment
         GameEnv = new GameEnvironment();
@@ -36,6 +39,7 @@ public static class ModEntry
         Log.Info("[STS2AIBot] Waiting for Python trainer connection...");
 
         // Register combat hooks
-        CombatHook.Register(GameEnv);
+        CombatHook.Register();  // 使用手动模式，不等 Python trainer
+
     }
 }

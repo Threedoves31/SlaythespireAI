@@ -47,6 +47,11 @@ public class DecisionEngine
     private int _turnCount = 0;
     private List<DecisionRecord> _history = new();
 
+    // Simulation timing
+    private DateTime _simulationStart;
+    private int _sequencesEvaluated = 0;
+    private const int MAX_SIMULATION_MS = 2000; // 2 second timeout
+
     public DecisionEngine()
     {
         Log.Info("[DecisionEngine] Initialized with Simulation strategy");
@@ -152,8 +157,16 @@ public class DecisionEngine
         if (!playable.Any())
             return EndTurn("No playable cards");
 
+        // Start simulation timer
+        _simulationStart = DateTime.UtcNow;
+        _sequencesEvaluated = 0;
+
         // Run simulation to find best sequence
         var bestSeq = FindBestSequence(state);
+
+        var elapsed = (DateTime.UtcNow - _simulationStart).TotalMilliseconds;
+        if (_debugMode)
+            Log.Info($"[DecisionEngine] Sim: evaluated {_sequencesEvaluated} sequences in {elapsed:F0}ms");
 
         if (bestSeq == null || bestSeq.Count == 0)
             return EndTurn("Simulation: no beneficial sequence found");
@@ -187,6 +200,10 @@ public class DecisionEngine
     private void DFS(CombatSnapshot state, List<CardPlay> current,
         ref List<CardPlay>? bestSeq, ref float bestScore, int depth)
     {
+        // Check timeout
+        if ((DateTime.UtcNow - _simulationStart).TotalMilliseconds > MAX_SIMULATION_MS)
+            return;
+
         if (depth >= 10) return; // safety cap
 
         var playable = GetPlayableCards(state);
@@ -201,6 +218,8 @@ public class DecisionEngine
             {
                 string key = card.Id + "|" + (target?.Id ?? "none");
                 if (!tried.Add(key)) continue;
+
+                _sequencesEvaluated++;
 
                 var next = SimulatePlay(state, card, target);
                 if (next == null) continue;
