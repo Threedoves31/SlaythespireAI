@@ -7,70 +7,16 @@
 起始角色：铁甲战士 (Ironclad)。
 开发优先级：先做 Mod 读取游戏状态 → 再做模拟器 + RL 训练 → 最后整合。
 
+## 部署
+
+编译后将 `STS2AIBot.dll` 和 `STS2AIBot.pck` 复制到游戏 Mods 目录即可加载：
+
+```
+D:\Steam\steamapps\common\Slay the Spire 2\mods\
+```
+
 ---
 
-## Phase 1: 环境搭建 + 逆向分析 sts2.dll
-
-### 1.1 创建 conda 环境
-```bash
-conda create -n sts python=3.10 -y
-conda activate sts
-pip install torch stable-baselines3 gymnasium numpy onnx onnxruntime tensorboard
-```
-
-### 1.2 创建项目结构
-```
-e:\Programs\Slaythespire\
-├── mod/                          # C# Mod 项目
-│   ├── STS2AIBot/                # Visual Studio C# 项目
-│   │   ├── STS2AIBot.csproj
-│   │   ├── ModEntry.cs           # ModInitializer 入口
-│   │   ├── StateExtractor/       # 游戏状态提取
-│   │   │   ├── GameStateReader.cs
-│   │   │   ├── CombatState.cs
-│   │   │   └── MapState.cs
-│   │   ├── Patches/              # Harmony patches
-│   │   │   ├── CombatPatches.cs
-│   │   │   ├── MapPatches.cs
-│   │   │   ├── RewardPatches.cs
-│   │   │   └── EventPatches.cs
-│   │   ├── AI/                   # AI 决策（ONNX 推理）
-│   │   │   ├── OnnxInference.cs
-│   │   │   └── ActionExecutor.cs
-│   │   └── Communication/        # 与外部 Python 通信（可选）
-│   │       └── PipeServer.cs
-│   ├── mod_manifest.json
-│   └── STS2AIBot.sln
-├── simulator/                    # Python 游戏模拟器
-│   ├── core/
-│   │   ├── game.py               # 游戏主循环
-│   │   ├── combat.py             # 战斗系统
-│   │   ├── player.py             # 玩家状态
-│   │   ├── enemy.py              # 敌人 AI
-│   │   ├── card.py               # 卡牌基类
-│   │   ├── relic.py              # 遗物系统
-│   │   └── map.py                # 地图生成
-│   ├── data/
-│   │   ├── cards_ironclad.json   # 铁甲战士卡牌数据
-│   │   ├── enemies_act1.json     # Act1 敌人数据
-│   │   └── relics.json           # 遗物数据
-│   └── env/
-│       ├── sts_env.py            # Gymnasium 环境
-│       ├── combat_env.py         # 战斗子环境
-│       └── meta_env.py           # Meta 决策环境
-├── training/                     # RL 训练
-│   ├── train_combat.py           # 战斗 agent 训练
-│   ├── train_meta.py             # Meta agent 训练
-│   ├── reward_shaping.py         # 奖励函数
-│   ├── state_encoder.py          # 状态编码器
-│   ├── action_mask.py            # 动作掩码
-│   ├── export_onnx.py            # 导出 ONNX 模型
-│   └── configs/
-│       └── ppo_config.yaml       # 训练超参数
-└── tools/
-    ├── decompile_analysis.md     # sts2.dll 逆向分析笔记
-    └── extract_game_data.py      # 从反编译代码提取卡牌/敌人数据
-```
 
 ### 1.3 逆向分析 sts2.dll
 用 Visual Studio Object Browser 或 dnSpy/ILSpy 反编译 `sts2.dll`，重点分析：
