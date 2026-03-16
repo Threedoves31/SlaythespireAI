@@ -67,17 +67,18 @@ class CombatReader:
         self.debug = debug
         self.use_ocr = use_ocr
 
-        # Try to import OCR libraries
+        # Disable OCR by default for faster operation
         self.ocr_available = False
-        try:
-            import pytesseract
-            self.pytesseract = pytesseract
-            self.ocr_available = True
-            if self.debug:
-                print("CombatReader: OCR available (pytesseract)")
-        except ImportError:
-            if self.debug:
-                print("CombatReader: OCR not available, using color/position heuristics")
+        if self.use_ocr:
+            try:
+                import pytesseract
+                self.pytesseract = pytesseract
+                self.ocr_available = True
+                if self.debug:
+                    print("CombatReader: OCR available (pytesseract)")
+            except ImportError:
+                if self.debug:
+                    print("CombatReader: OCR not available, using color/position heuristics")
 
         # Card database for color-based identification
         self._init_card_colors()

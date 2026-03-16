@@ -46,6 +46,7 @@ python visual_ai/main.py --debug
 --resolution WIDTHxHEIGHT    Screen resolution (default: 2560x1440)
 --debug                    Enable debug output
 --ocr                      Use OCR for reading numbers (slower but more accurate)
+--shortcuts                Use keyboard shortcuts for card selection (faster than mouse)
 --test                     Test mode - single capture and exit
 ```
 
@@ -53,13 +54,16 @@ python visual_ai/main.py --debug
 
 ```bash
 # Run with debug output
-python visual_ai/main.py --debug
+python src/visual_ai/main.py --debug
+
+# Run with keyboard shortcuts (faster)
+python src/visual_ai/main.py --shortcuts
 
 # Run with OCR for better number recognition
-python visual_ai/main.py --ocr
+python src/visual_ai/main.py --ocr
 
 # Test screen capture only
-python visual_ai/main.py --test
+python src/visual_ai/main.py --test
 ```
 
 ## How It Works

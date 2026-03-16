@@ -33,10 +33,12 @@ class STS2VisualAI:
         self,
         resolution=(2560, 1440),
         debug=False,
-        use_ocr=False
+        use_ocr=False,
+        use_shortcuts=False
     ):
         self.resolution = resolution
         self.debug = debug
+        self.use_shortcuts = use_shortcuts  # Use keyboard shortcuts instead of mouse
         self.running = False
 
         # Initialize components
@@ -49,7 +51,7 @@ class STS2VisualAI:
         self.keyboard = create_keyboard_controller()
         self.ai = create_combat_ai(debug=debug)
 
-        print("STS2 Visual AI initialized!")
+        print(f"STS2 Visual AI initialized! Shortcuts mode: {use_shortcuts}")
 
     def start(self):
         """Start the AI main loop."""
@@ -145,20 +147,32 @@ class STS2VisualAI:
         if action.type == "play_card":
             card = state.hand[action.card_index]
 
-            # Move to card and click
-            x, y = card.position
-            self.mouse.click(x, y)
-            self.mouse.wait_after_action()
+            if self.use_shortcuts:
+                # Use keyboard shortcuts
+                # Select card by number (1-9)
+                self.keyboard.select_option(action.card_index + 1)
+                time.sleep(0.1)
 
-            # If targeting enemy, drag to target
-            if action.target_index >= 0 and action.target_index < len(state.enemies):
-                enemy = state.enemies[action.target_index]
-                ex, ey = enemy.position
-                self.mouse.drag_to(x, y, ex, ey, duration=0.2)
+                # If targeting enemy, select target by number
+                if action.target_index >= 0 and action.target_index < len(state.enemies):
+                    self.keyboard.select_option(action.target_index + 1)
+                    time.sleep(0.1)
+            else:
+                # Use mouse
+                # Move to card and click
+                x, y = card.position
+                self.mouse.click(x, y)
                 self.mouse.wait_after_action()
 
+                # If targeting enemy, drag to target
+                if action.target_index >= 0 and action.target_index < len(state.enemies):
+                    enemy = state.enemies[action.target_index]
+                    ex, ey = enemy.position
+                    self.mouse.drag_to(x, y, ex, ey, duration=0.2)
+                    self.mouse.wait_after_action()
+
             if self.debug:
-                print(f"  Executed: Play {card.name}")
+                print(f"  Executed: Play {card.name} ({'shortcuts' if self.use_shortcuts else 'mouse'})")
 
         elif action.type == "end_turn":
             # Press space to end turn
@@ -207,6 +221,8 @@ def main():
                        help="Enable debug output")
     parser.add_argument("--ocr", action="store_true",
                        help="Use OCR for reading numbers")
+    parser.add_argument("--shortcuts", action="store_true",
+                       help="Use keyboard shortcuts instead of mouse (faster)")
     parser.add_argument("--test", action="store_true",
                        help="Test mode - single capture and exit")
 
@@ -225,7 +241,8 @@ def main():
     ai = STS2VisualAI(
         resolution=resolution,
         debug=args.debug,
-        use_ocr=args.ocr
+        use_ocr=args.ocr,
+        use_shortcuts=args.shortcuts
     )
 
     if args.test:

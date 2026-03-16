@@ -13,29 +13,52 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 using STS2AIBot.StateExtractor;
 using STS2AIBot.Communication;
+using STS2AIBot.AI;
+using STS2AIBot.UI;
 
 namespace STS2AIBot;
 
 /// <summary>
-/// Hooks into CombatManager.TurnStarted to intercept each player turn
-/// and drive the AI decision loop.
+/// Enhanced combat hook with improved AI decision engine and debug controls.
+/// Supports multiple strategies, manual rating, and in-game controls.
 /// </summary>
 public static class CombatHook
 {
     private static bool _isRunning = false;
     private static GameEnvironment? _gameEnv;
+    private static DecisionEngine? _decisionEngine;
+    private static DebugWindow? _debugWindow;
+    private static AIController? _aiController;
+    private static DecisionEngine.DecisionStrategy _strategy = DecisionEngine.DecisionStrategy.SimpleHeuristic;
+
+    private static int _turnCount = 0;
+    private static List<CardModel> _playedThisTurn = new();
+    private static int _previousPlayerHp = 0;
 
     public static void Register()
     {
+        // Initialize components
+        _debugWindow = new DebugWindow();
+        _decisionEngine = new DecisionEngine();
+        _aiController = new AIController(_debugWindow, _decisionEngine);
+
+        // Register combat hook
         CombatManager.Instance.TurnStarted += OnTurnStarted;
-        Log.Info("[STS2AIBot] CombatHook registered (heuristic mode)");
+
+        // Initialize controller (for manual override)
+        _aiController.Initialize();
+
+        Log.Info("[CombatHook] Enhanced combat hook registered");
+        Log.Info("[CombatHook] Press F2 in-game to cycle strategies");
+        Log.Info("[CombatHook] Press F3 to toggle pause");
+        Log.Info("[CombatHook] Press F4 to toggle manual mode");
     }
 
     public static void Register(GameEnvironment gameEnv)
     {
         _gameEnv = gameEnv;
         CombatManager.Instance.TurnStarted += OnTurnStarted;
-        Log.Info("[STS2AIBot] CombatHook registered (training mode)");
+        Log.Info("[CombatHook] CombatHook registered (training mode)");
     }
 
     private static void OnTurnStarted(CombatState state)
@@ -50,9 +73,24 @@ public static class CombatHook
             return;
         }
 
-        // Heuristic mode (original code)
+        // Check if paused
+        if (_debugWindow != null && _debugWindow.Paused)
+        {
+            Log.Info("[CombatHook] AI paused, waiting for manual input");
+            return;
+        }
+
+        // Manual mode: don't auto-play
+        if (_debugWindow != null && _debugWindow.ManualMode)
+        {
+            Log.Info("[CombatHook] Manual mode active, no auto-play");
+            return;
+        }
+
+        // AI mode
         if (_isRunning) return;
         _isRunning = true;
+
         // Fire-and-forget async task — same pattern as AutoSlayer
         var task = PlayTurnAsync(state);
         MegaCrit.Sts2.Core.Helpers.TaskHelper.RunSafely(task);
@@ -70,54 +108,108 @@ public static class CombatHook
             var player = LocalContext.GetMe(runState);
             if (player == null) return;
 
-            // Log the current state
+            // Start of turn
+            _turnCount++;
+            _previousPlayerHp = player.Creature.CurrentHp;
+            _playedThisTurn.Clear();
+
+            // Read combat state
             var snapshot = GameStateReader.TryRead();
             if (snapshot != null)
-                Log.Info("[STS2AIBot]\n" + snapshot.ToString());
+            {
+                Log.Info("[CombatHook] Failed to read combat state");
+                return;
+            }
 
-            // Play cards until no more playable cards or energy runs out
+            // Update debug window with initial state
+            _debugWindow?.Update(snapshot, null, _turnCount);
+
+            // Play cards until decision says to end
             int cardsPlayed = 0;
             var attempted = new HashSet<string>();
 
-            while (cardsPlayed < 50 && CombatManager.Instance.IsPlayPhase && CombatManager.Instance.IsInProgress)
+            while (cardsPlayed < 20 && CombatManager.Instance.IsPlayPhase && CombatManager.Instance.IsInProgress)
             {
-                var hand = PileType.Hand.GetPile(player);
-                var playable = hand.Cards
-                    .Where(c =>
-                    {
-                        c.CanPlay(out var reason, out _);
-                        return reason == UnplayableReason.None && !attempted.Contains(c.Id.Entry + c.GetHashCode());
-                    })
-                    .ToList();
+                if (_debugWindow != null && _debugWindow.Paused) break;
 
-                if (playable.Count == 0)
+                // Get AI decision
+                var decision = _decisionEngine?.MakeDecision(snapshot);
+
+                if (decision == null)
                 {
-                    Log.Info("[STS2AIBot] No playable cards, ending turn");
+                    Log.Info("[CombatHook] No decision available, ending turn");
                     break;
                 }
 
-                // Simple heuristic: prefer attacks, then skills, then powers
-                var card = PickCard(playable, state);
-                var target = PickTarget(card, state);
+                // Execute decision
+                if (decision.Type == DecisionEngine.ActionType.PlayCard &&
+                    decision.Card != null)
+                {
+                    var card = FindCardById(player, decision.Card.Id);
+                    if (card != null && decision.Card.EnergyCost <= player.PlayerCombatState?.Energy)
+                    {
+                        attempted.Add(decision.Card.Id + card.GetHashCode());
 
-                attempted.Add(card.Id.Entry + card.GetHashCode());
-                Log.Info($"[STS2AIBot] Playing {card.Id.Entry} -> target: {target?.Monster?.Id.Entry ?? "none"}");
+                        // Get target
+                        Creature? target = null;
+                        if (decision.Target != null)
+                        {
+                            target = FindEnemyById(state, decision.Target.Id);
+                        }
 
-                await CardCmd.AutoPlay(new BlockingPlayerChoiceContext(), card, target);
-                cardsPlayed++;
-                await Task.Delay(50);
+                        // Log action
+                        Log.Info($"[CombatHook] Playing {decision.Card.Id} -> {decision.Target?.Id ?? "none"}");
+                        Log.Info($"[CombatHook] Reason: {decision.Reason}");
+
+                        // Play card
+                        await CardCmd.AutoPlay(new BlockingPlayerChoiceContext(), card, target);
+
+                        _playedThisTurn.Add(card);
+                        cardsPlayed++;
+
+                        // Wait for animation
+                        await Task.Delay(100);
+
+                        // Refresh state
+                        snapshot = GameStateReader.TryRead();
+                        if (snapshot == null) break;
+                    }
+                }
+                else if (decision.Type == DecisionEngine.ActionType.EndTurn)
+                {
+                    Log.Info("[CombatHook] Ending turn");
+                    break;
+                }
+                else
+                {
+                    Log.Info("[CombatHook] Unknown action type, ending turn");
+                    break;
+                }
+            }
+
+            // Record turn outcome
+            var finalSnapshot = GameStateReader.TryRead();
+            if (finalSnapshot != null)
+            {
+                bool turnSuccessful = finalSnapshot.PlayerHp > _previousPlayerHp ||
+                                    !finalSnapshot.Enemies.Any(e => e.Hp > 0);
+                _decisionEngine?.RecordDecision(
+                    new Decision(DecisionEngine.ActionType.EndTurn, null, null, 0f, "Turn ended"),
+                    finalSnapshot,
+                    turnSuccessful
+                );
             }
 
             // End turn
             if (CombatManager.Instance.IsPlayPhase && CombatManager.Instance.IsInProgress)
             {
-                Log.Info("[STS2AIBot] Ending turn");
+                Log.Info("[CombatHook] Ending turn");
                 PlayerCmd.EndTurn(player, canBackOut: false);
             }
         }
         catch (Exception ex)
         {
-            Log.Info($"[STS2AIBot] PlayTurnAsync error: {ex}");
+            Log.Info($"[CombatHook] PlayTurnAsync error: {ex}");
         }
         finally
         {
@@ -135,39 +227,15 @@ public static class CombatHook
         }
     }
 
-    /// <summary>
-    /// Simple card priority: Attacks > Skills > Powers.
-    /// Within each type, prefer lower energy cost first (greedy).
-    /// </summary>
-    private static CardModel PickCard(List<CardModel> playable, CombatState state)
+    private static CardModel? FindCardById(Player player, string cardId)
     {
-        // Prioritize attacks when enemies are alive
-        bool hasLivingEnemies = state.HittableEnemies.Any();
-
-        if (hasLivingEnemies)
-        {
-            var attacks = playable.Where(c => c.Type == CardType.Attack).ToList();
-            if (attacks.Count > 0)
-                return attacks.OrderBy(c => c.EnergyCost.GetAmountToSpend()).First();
-        }
-
-        var skills = playable.Where(c => c.Type == CardType.Skill).ToList();
-        if (skills.Count > 0)
-            return skills.OrderBy(c => c.EnergyCost.GetAmountToSpend()).First();
-
-        return playable.OrderBy(c => c.EnergyCost.GetAmountToSpend()).First();
+        var hand = PileType.Hand.GetPile(player);
+        return hand.Cards.FirstOrDefault(c => c.Id.Entry == cardId);
     }
 
-    /// <summary>
-    /// Pick the lowest-HP hittable enemy as target (focus fire).
-    /// </summary>
-    private static Creature? PickTarget(CardModel card, CombatState state)
+    private static Creature? FindEnemyById(CombatState combatState, string enemyId)
     {
-        if (card.TargetType != TargetType.AnyEnemy)
-            return null;
-
-        return state.HittableEnemies
-            .OrderBy(e => e.CurrentHp)
-            .FirstOrDefault();
+        return combatState.Enemies.FirstOrDefault(e =>
+            e.Monster?.Id.Entry == enemyId && e.IsAlive);
     }
 }
