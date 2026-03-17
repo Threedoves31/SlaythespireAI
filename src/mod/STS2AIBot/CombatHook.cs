@@ -170,7 +170,11 @@ public static class CombatHook
                 if (decision.Type == ActionType.PlayCard && decision.Card != null)
                 {
                     var card = FindCardById(player, decision.Card.Id);
-                    if (card != null && decision.Card.EnergyCost <= player.PlayerCombatState?.Energy)
+                    int currentEnergy = player.PlayerCombatState?.Energy ?? 0;
+                    // Use real card energy cost with modifiers, not snapshot cost
+                    int cardEnergyCost = card?.EnergyCost.GetAmountToSpend() ?? 999;
+                    
+                    if (card != null && cardEnergyCost <= currentEnergy)
                     {
                         // Get target
                         Creature? target = null;
@@ -179,22 +183,40 @@ public static class CombatHook
                             target = FindEnemyById(state, decision.Target.Id);
                         }
 
-                        // Log action
+                        // Check if card can be played with this target
+                        if (!card.CanPlayTargeting(target))
+                        {
+                            Log.Info($"[CombatHook] Cannot play {decision.Card.Id} targeting {decision.Target?.Id ?? "none"}");
+                            break;
+                        }
+
+                        // Log action with energy info
                         Log.Info($"[CombatHook] [{PolicyManager.Instance.CurrentType}] " +
-                                 $"Playing {decision.Card.Id} -> {decision.Target?.Id ?? "none"}");
+                                 $"Playing {decision.Card.Id} (cost {cardEnergyCost}) -> {decision.Target?.Id ?? "none"} " +
+                                 $"| Energy: {currentEnergy}");
 
-                        // Play card
-                        await CardCmd.AutoPlay(new BlockingPlayerChoiceContext(), card, target);
+                        // Use TryManualPlay which properly consumes energy via PlayCardAction
+                        // This enqueues the card play action which will be executed by the game
+                        bool success = card.TryManualPlay(target);
+                        
+                        if (success)
+                        {
+                            _playedThisTurn.Add(card);
+                            cardsPlayed++;
 
-                        _playedThisTurn.Add(card);
-                        cardsPlayed++;
-
-                        // Wait for animation
-                        await Task.Delay(100);
+                            // Wait longer for the action to be processed
+                            await Task.Delay(300);
+                        }
+                        else
+                        {
+                            Log.Info($"[CombatHook] TryManualPlay failed for {decision.Card.Id}");
+                            break;
+                        }
                     }
                     else
                     {
-                        Log.Info($"[CombatHook] Could not play {decision.Card.Id}: card not found or insufficient energy");
+                        Log.Info($"[CombatHook] Could not play {decision.Card.Id}: card not found or insufficient energy " +
+                                 $"(need {cardEnergyCost}, have {currentEnergy})");
                     }
                 }
                 else if (decision.Type == ActionType.EndTurn)
