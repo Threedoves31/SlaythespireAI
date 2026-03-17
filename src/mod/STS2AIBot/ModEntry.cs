@@ -1,8 +1,10 @@
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Modding;
 using MegaCrit.Sts2.Core.Logging;
+using MegaCrit.Sts2.Core.Commands;
 using STS2AIBot.Communication;
 using STS2AIBot.UI;
+using STS2AIBot.AI;
 using System.Reflection;
 
 namespace STS2AIBot;
@@ -46,6 +48,10 @@ public static class ModEntry
 
         // Register combat hooks
         CombatHook.Register();
+
+        // Register AI card selector for smart card choices (True Grit, Burning Pact, etc.)
+        CardSelectCmd.UseSelector(new AICardSelector());
+        Log.Info("[STS2AIBot] AICardSelector registered");
 
         // Register AIDebugger using Harmony patch for delayed initialization
         AIDebuggerRegistrar.Register();
