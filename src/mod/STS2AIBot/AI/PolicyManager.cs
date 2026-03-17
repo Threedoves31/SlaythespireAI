@@ -1,16 +1,16 @@
 // Policy Manager - Central management for AI policies.
-// Allows switching between policies via hotkey or config.
+// Allows switching between policies via hotkey or console command.
+// Also controls AI pause/manual state globally.
 
 using System;
-using System.Collections.Generic;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIBot.StateExtractor;
 
 namespace STS2AIBot.AI;
 
 /// <summary>
-/// Central manager for AI policies.
-/// Supports hot-swapping policies at runtime via F2 key.
+/// Central manager for AI policies and control state.
+/// Supports hot-swapping policies at runtime.
 /// </summary>
 public class PolicyManager
 {
@@ -19,102 +19,99 @@ public class PolicyManager
 
     private IPolicy _currentPolicy;
     private PolicyType _currentType;
-    private readonly Dictionary<PolicyType, IPolicy> _policies = new();
 
-    // Policy cycle order
-    private static readonly PolicyType[] PolicyCycle = new[]
-    {
-        PolicyType.Heuristic,
-        PolicyType.Simulation,
-        PolicyType.Random,
-        // PolicyType.MCTS,  // TODO
-        // PolicyType.PPO,   // TODO
-    };
+    // Global control state (works even outside combat)
+    private bool _paused = false;
+    private bool _manualMode = false;
 
-    private int _cycleIndex = 0;
-
-    public PolicyType CurrentType => _currentType;
     public IPolicy CurrentPolicy => _currentPolicy;
+    public PolicyType CurrentType => _currentType;
+    
+    public bool Paused 
+    { 
+        get => _paused; 
+        set 
+        {
+            _paused = value;
+            Log.Info($"[PolicyManager] Paused: {_paused}");
+        }
+    }
+    
+    public bool ManualMode 
+    { 
+        get => _manualMode; 
+        set 
+        {
+            _manualMode = value;
+            Log.Info($"[PolicyManager] Manual Mode: {_manualMode}");
+        }
+    }
+
     public event Action<PolicyType>? OnPolicyChanged;
 
     private PolicyManager()
     {
-        // Initialize with heuristic by default
+        _currentPolicy = new HeuristicPolicy(debugMode: false);
         _currentType = PolicyType.Heuristic;
-        _currentPolicy = CreatePolicy(PolicyType.Heuristic);
-        _policies[PolicyType.Heuristic] = _currentPolicy;
-
-        Log.Info($"[PolicyManager] Initialized with { _currentPolicy.Name} policy");
-        Log.Info("[PolicyManager] Press F2 to cycle policies");
     }
 
     /// <summary>
-    /// Get or create a policy instance.
+    /// Make a decision using current policy.
     /// </summary>
-    private IPolicy CreatePolicy(PolicyType type)
+    public PolicyDecision? MakeDecision(CombatSnapshot state)
     {
-        if (_policies.TryGetValue(type, out var existing))
-            return existing;
-
-        IPolicy policy = type switch
-        {
-            PolicyType.Heuristic => new HeuristicPolicy(),
-            PolicyType.Simulation => new SimulationPolicy(),
-            PolicyType.Random => new RandomPolicy(),
-            PolicyType.Remote => new RemotePolicy(),
-            _ => new HeuristicPolicy(),
-        };
-
-        _policies[type] = policy;
-        return policy;
+        // Don't make decisions when paused or in manual mode
+        if (_paused || _manualMode) return null;
+        return _currentPolicy.MakeDecision(state);
     }
 
     /// <summary>
-    /// Switch to a specific policy type.
+    /// Cycle to next policy in order: Heuristic -> Simulation -> Random -> Heuristic
+    /// </summary>
+    public void CyclePolicy()
+    {
+        var next = _currentType switch
+        {
+            PolicyType.Heuristic => PolicyType.Simulation,
+            PolicyType.Simulation => PolicyType.Random,
+            PolicyType.Random => PolicyType.Heuristic,
+            _ => PolicyType.Heuristic
+        };
+        SetPolicy(next);
+    }
+
+    /// <summary>
+    /// Set specific policy type.
     /// </summary>
     public void SetPolicy(PolicyType type)
     {
         if (type == _currentType) return;
 
-        var newPolicy = CreatePolicy(type);
+        _currentPolicy = type switch
+        {
+            PolicyType.Heuristic => new HeuristicPolicy(debugMode: false),
+            PolicyType.Simulation => new SimulationPolicy(),
+            PolicyType.Random => new RandomPolicy(),
+            _ => new HeuristicPolicy(debugMode: false)
+        };
         _currentType = type;
-        _currentPolicy = newPolicy;
 
-        Log.Info($"[PolicyManager] Switched to {newPolicy.Name} policy");
         OnPolicyChanged?.Invoke(type);
+        Log.Info($"[PolicyManager] Switched to {type} policy");
     }
 
-    /// <summary>
-    /// Cycle to the next policy in the list.
-    /// Called by F2 hotkey.
-    /// </summary>
-    public void CyclePolicy()
+    public void TogglePause()
     {
-        _cycleIndex = (_cycleIndex + 1) % PolicyCycle.Length;
-        SetPolicy(PolicyCycle[_cycleIndex]);
+        Paused = !Paused;
     }
 
-    /// <summary>
-    /// Make a decision using the current policy.
-    /// </summary>
-    public PolicyDecision MakeDecision(CombatSnapshot state)
+    public void ToggleManualMode()
     {
-        return _currentPolicy.MakeDecision(state);
+        ManualMode = !ManualMode;
     }
 
-    /// <summary>
-    /// Get available policy types.
-    /// </summary>
-    public static IEnumerable<PolicyType> GetAvailablePolicies()
-    {
-        return PolicyCycle;
-    }
-
-    /// <summary>
-    /// Get policy status string for UI display.
-    /// </summary>
     public string GetStatusString()
     {
-        return $"Policy: {_currentPolicy.Name} - {_currentPolicy.Description}";
+        return $"Policy: {_currentPolicy.Name} ({_currentType}) | Paused: {_paused} | Manual: {_manualMode}";
     }
 }

@@ -27,8 +27,12 @@ public static class ModEntry
         PipeServer = new PipeServer();
 
         // Connect callbacks
-        PipeServer.OnResetRequested += (payload) => GameEnv.Initialize();
-        PipeServer.OnStepRequested += GameEnv.Step;
+        PipeServer.OnResetRequested += () => GameEnv.Initialize();
+        PipeServer.OnStepRequested += (arg) => {
+            if (int.TryParse(arg, out int action))
+                GameEnv.Step(action);
+            return GameEnv.GetState();
+        };
         PipeServer.OnCloseRequested += () => Log.Info("[PipeServer] Close requested");
 
         PipeServer.GetStateCallback = GameEnv.GetState;

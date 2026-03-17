@@ -13,7 +13,7 @@ namespace STS2AIBot.UI;
 
 /// <summary>
 /// Unified debugger for AI control and monitoring.
-/// Captures F1-F5 hotkeys via Godot's input system.
+/// Uses _UnhandledKeyInput to capture hotkeys without interfering with game.
 /// </summary>
 public partial class AIDebugger : Node
 {
@@ -36,111 +36,97 @@ public partial class AIDebugger : Node
     public bool ManualMode => _manualMode;
     public bool VerboseLogging => _verboseLogging;
 
+    // Key masks for modifier detection
+    private const long KeyMaskAlt = 0x1000000L;
+    private const long KeyMaskShift = 0x2000000L;
+    private const long KeyMaskCtrl = 0x4000000L;
+
     public override void _Ready()
     {
         Instance = this;
         SetProcessUnhandledKeyInput(true);
-        Log.Info("[AIDebugger] Initialized - Press F1 for help");
+        Log.Info("[AIDebugger] Initialized");
         PrintHelp();
     }
 
-    public override void _Input(InputEvent @event)
+    public override void _UnhandledKeyInput(InputEvent @event)
     {
         if (@event is InputEventKey { Pressed: true } keyEvent)
         {
+            // Ignore standalone modifier keys
             var key = keyEvent.Keycode;
+            if (key is Key.Ctrl or Key.Shift or Key.Alt or Key.Meta) return;
+
+            // Get key with modifiers as a single value
+            long keyWithMods = (long)keyEvent.GetKeycodeWithModifiers();
+            
+            // Define hotkeys: Alt+Key combinations
             bool handled = true;
             
-            switch (key)
+            // Alt+P = Pause
+            if (keyWithMods == (KeyMaskAlt | (long)Key.P))
             {
-                // Ctrl+Shift+key combinations to avoid game conflicts
-                case Key.F1:
-                    if (keyEvent.ShiftPressed)
-                        PrintHelp();
-                    else
-                        handled = false;
-                    break;
-                    
-                case Key.P:
-                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
-                        TogglePause();
-                    else
-                        handled = false;
-                    break;
-                    
-                case Key.M:
-                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
-                        ToggleManualMode();
-                    else
-                        handled = false;
-                    break;
-                    
-                case Key.L:
-                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
-                        ToggleVerboseLogging();
-                    else
-                        handled = false;
-                    break;
-                    
-                case Key.C:
-                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
-                        CyclePolicy();
-                    else
-                        handled = false;
-                    break;
-                    
-                case Key.H:
-                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
-                        ShowHistory();
-                    else
-                        handled = false;
-                    break;
-                    
-                // Number keys for rating (Ctrl+Shift+1-5)
-                case Key.Key1:
-                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
-                        RateLastAction(1);
-                    else
-                        handled = false;
-                    break;
-                case Key.Key2:
-                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
-                        RateLastAction(2);
-                    else
-                        handled = false;
-                    break;
-                case Key.Key3:
-                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
-                        RateLastAction(3);
-                    else
-                        handled = false;
-                    break;
-                case Key.Key4:
-                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
-                        RateLastAction(4);
-                    else
-                        handled = false;
-                    break;
-                case Key.Key5:
-                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
-                        RateLastAction(5);
-                    else
-                        handled = false;
-                    break;
-                case Key.Key0:
-                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
-                        RateLastAction(0);
-                    else
-                        handled = false;
-                    break;
-                    
-                default:
-                    handled = false;
-                    break;
+                TogglePause();
+            }
+            // Alt+M = Manual mode
+            else if (keyWithMods == (KeyMaskAlt | (long)Key.M))
+            {
+                ToggleManualMode();
+            }
+            // Alt+C = Cycle policy
+            else if (keyWithMods == (KeyMaskAlt | (long)Key.C))
+            {
+                CyclePolicy();
+            }
+            // Alt+L = Toggle logging
+            else if (keyWithMods == (KeyMaskAlt | (long)Key.L))
+            {
+                ToggleVerboseLogging();
+            }
+            // Alt+H = History
+            else if (keyWithMods == (KeyMaskAlt | (long)Key.H))
+            {
+                ShowHistory();
+            }
+            // Shift+F1 = Help
+            else if (keyWithMods == (KeyMaskShift | (long)Key.F1))
+            {
+                PrintHelp();
+            }
+            // Alt+0-5 = Rate last action
+            else if (keyWithMods == (KeyMaskAlt | (long)Key.Key0))
+            {
+                RateLastAction(0);
+            }
+            else if (keyWithMods == (KeyMaskAlt | (long)Key.Key1))
+            {
+                RateLastAction(1);
+            }
+            else if (keyWithMods == (KeyMaskAlt | (long)Key.Key2))
+            {
+                RateLastAction(2);
+            }
+            else if (keyWithMods == (KeyMaskAlt | (long)Key.Key3))
+            {
+                RateLastAction(3);
+            }
+            else if (keyWithMods == (KeyMaskAlt | (long)Key.Key4))
+            {
+                RateLastAction(4);
+            }
+            else if (keyWithMods == (KeyMaskAlt | (long)Key.Key5))
+            {
+                RateLastAction(5);
+            }
+            else
+            {
+                handled = false;
             }
             
             if (handled)
+            {
                 GetViewport().SetInputAsHandled();
+            }
         }
     }
 
@@ -175,26 +161,26 @@ public partial class AIDebugger : Node
 
     #region Control Methods
 
-    private void CyclePolicy()
+    public void CyclePolicy()
     {
         PolicyManager.Instance.CyclePolicy();
         var current = PolicyManager.Instance.CurrentPolicy;
         Log.Info($"[AIDebugger] Policy: {current.Name}");
     }
 
-    private void TogglePause()
+    public void TogglePause()
     {
         _paused = !_paused;
         Log.Info($"[AIDebugger] Paused: {_paused}");
     }
 
-    private void ToggleManualMode()
+    public void ToggleManualMode()
     {
         _manualMode = !_manualMode;
         Log.Info($"[AIDebugger] Manual Mode: {_manualMode}");
     }
 
-    private void ToggleVerboseLogging()
+    public void ToggleVerboseLogging()
     {
         _verboseLogging = !_verboseLogging;
         Log.Info($"[AIDebugger] Verbose Logging: {_verboseLogging}");
@@ -218,7 +204,7 @@ public partial class AIDebugger : Node
         Log.Info($"[AIDebugger] Rated '{_lastDecision.Card?.Id}' as {stars}/5");
     }
 
-    private void ShowHistory()
+    public void ShowHistory()
     {
         Log.Info("=== Decision History (last 10) ===");
         int start = Math.Max(0, _actionLog.Count - 10);
@@ -239,15 +225,15 @@ public partial class AIDebugger : Node
 
     private void PrintHelp()
     {
-        Log.Info("=== STS2 AI Bot - Hotkeys (Ctrl+Shift+Key) ===");
-        Log.Info("  Shift+F1     - Show this help");
-        Log.Info("  Ctrl+Shift+P - Toggle pause");
-        Log.Info("  Ctrl+Shift+M - Toggle manual mode");
-        Log.Info("  Ctrl+Shift+L - Toggle verbose logging");
-        Log.Info("  Ctrl+Shift+C - Cycle AI policy");
-        Log.Info("  Ctrl+Shift+H - Show decision history");
-        Log.Info("  Ctrl+Shift+0-5 - Rate last action");
-        Log.Info("==============================================");
+        Log.Info("=== STS2 AI Bot - Hotkeys ===");
+        Log.Info("  Alt+P - Toggle pause");
+        Log.Info("  Alt+M - Toggle manual mode");
+        Log.Info("  Alt+C - Cycle AI policy");
+        Log.Info("  Alt+L - Toggle verbose logging");
+        Log.Info("  Alt+H - Show decision history");
+        Log.Info("  Alt+0-5 - Rate last action");
+        Log.Info("  Shift+F1 - Show this help");
+        Log.Info("==============================");
         Log.Info($"Current: {PolicyManager.Instance.GetStatusString()}");
     }
 

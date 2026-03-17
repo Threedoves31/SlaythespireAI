@@ -1,3 +1,6 @@
+// PipeServer - Named pipe communication for Python training integration and console commands.
+// Receives commands from external processes and exposes AI control API.
+
 using System;
 using System.IO;
 using System.IO.Pipes;
@@ -5,267 +8,237 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Logging;
+using STS2AIBot.StateExtractor;
+using STS2AIBot.AI;
 
 namespace STS2AIBot.Communication;
 
 /// <summary>
-/// Communication protocol between C# mod and Python trainer.
-/// Uses Named Pipes for bidirectional communication.
+/// Named pipe server for external communication.
+/// Supports both training mode (step/reset) and console commands (pause/policy/etc).
 /// </summary>
-public enum MessageCommand
+public class PipeServer
 {
-    // Python -> C#
-    RESET,       // Reset environment, get initial state
-    STEP,        // Execute action, get next state
-    GET_ACTION_MASK,  // Get valid actions
-    GET_STATE,   // Get current state
-    CLOSE,       // Close connection
+    private CancellationTokenSource? _cts;
+    private bool _running = false;
 
-    // C# -> Python
-    STATE,       // Send state observation
-    DONE,        // Episode finished
-    ERROR,       // Error occurred
-    ACK          // Acknowledge
-}
+    // Training callbacks
+    public Func<string>? GetStateCallback { get; set; }
+    public Func<string>? GetActionMaskCallback { get; set; }
+    
+    // Command callbacks
+    public Action? OnResetRequested { get; set; }
+    public Func<string, string>? OnStepRequested { get; set; }
+    public Action? OnCloseRequested { get; set; }
 
-/// <summary>
-/// Message format for pipe communication.
-/// Format: COMMAND|JSON_PAYLOAD
-/// </summary>
-public record PipeMessage(
-    MessageCommand Command,
-    string Payload
-)
-{
-    public string Serialize()
-    {
-        var json = Payload ?? "";
-        return $"{(int)Command}|{json}";
-    }
-
-    public static PipeMessage Deserialize(string data)
-    {
-        if (string.IsNullOrEmpty(data))
-            return new PipeMessage(MessageCommand.ERROR, "Empty message");
-
-        var parts = data.Split('|', 2);
-        if (parts.Length < 1 || !int.TryParse(parts[0], out int cmdInt))
-            return new PipeMessage(MessageCommand.ERROR, $"Invalid command: {data}");
-
-        var command = (MessageCommand)cmdInt;
-        var payload = parts.Length > 1 ? parts[1] : "";
-        return new PipeMessage(command, payload);
-    }
-}
-
-/// <summary>
-/// Named pipe server for communicating with Python trainer.
-/// </summary>
-public class PipeServer : IDisposable
-{
-    private const string PIPE_NAME = "STS2AIBot_Training";
-    private NamedPipeServerStream? _pipe;
-    private CancellationTokenSource _cts = new();
-    private Task? _listenTask;
-    private readonly object _lock = new();
-    private bool _disposed = false;
-
-    // Event handlers
-    public event Action<string>? OnResetRequested;
-    public event Action<int>? OnStepRequested;
-    public event Action? OnCloseRequested;
-
-    // Callbacks for responses
-    public Func<string>? GetStateCallback;
-    public Func<string>? GetActionMaskCallback;
-
-    public bool IsConnected => _pipe?.IsConnected == true;
-
-    public PipeServer()
-    {
-        Log.Info("[PipeServer] Created");
-    }
+    private const string PIPE_NAME = "STS2AIBot";
 
     public void Start()
     {
-        if (_listenTask != null && !_listenTask.IsCompleted)
-            return;
-
-        Log.Info("[PipeServer] Starting pipe server...");
-
-        _listenTask = Task.Run(async () =>
-        {
-            while (!_cts.IsCancellationRequested && !_disposed)
-            {
-                try
-                {
-                    await WaitForConnectionAsync();
-                    await ListenLoopAsync();
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    Log.Info($"[PipeServer] Error: {ex.Message}");
-                    await Task.Delay(1000); // Wait before retrying
-                }
-            }
-        }, _cts.Token);
+        if (_running) return;
+        _running = true;
+        _cts = new CancellationTokenSource();
+        
+        Task.Run(() => ServerLoop(_cts.Token));
     }
 
-    private async Task WaitForConnectionAsync()
+    public void Stop()
     {
-        while (!_cts.IsCancellationRequested && !_disposed)
+        _running = false;
+        _cts?.Cancel();
+    }
+
+    private async Task ServerLoop(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested && _running)
         {
+            NamedPipeServerStream? server = null;
             try
             {
-                Log.Info("[PipeServer] Waiting for Python client connection...");
-                _pipe = new NamedPipeServerStream(
-                    PIPE_NAME,
-                    PipeDirection.InOut,
-                    NamedPipeServerStream.MaxAllowedServerInstances,
-                    PipeTransmissionMode.Message,
-                    PipeOptions.Asynchronous
-                );
+                // Use Byte mode instead of Message mode for better compatibility
+                server = new NamedPipeServerStream(
+                    PIPE_NAME, 
+                    PipeDirection.InOut, 
+                    1,
+                    PipeTransmissionMode.Byte,
+                    PipeOptions.Asynchronous);
+                
+                Log.Info("[PipeServer] Waiting for connection...");
+                await server.WaitForConnectionAsync(token);
+                Log.Info("[PipeServer] Client connected");
 
-                await _pipe.WaitForConnectionAsync();
-                Log.Info("[PipeServer] Client connected!");
+                var buffer = new byte[4096];
+                var inputBuffer = new StringBuilder();
+
+                while (server.IsConnected && !token.IsCancellationRequested)
+                {
+                    // Read raw bytes
+                    int bytesRead = await server.ReadAsync(buffer, token);
+                    if (bytesRead == 0) break;
+
+                    inputBuffer.Append(Encoding.UTF8.GetString(buffer, 0, bytesRead));
+
+                    // Check for complete line (ends with \n)
+                    string input = inputBuffer.ToString();
+                    if (input.Contains('\n'))
+                    {
+                        int newlineIdx = input.IndexOf('\n');
+                        string line = input.Substring(0, newlineIdx).Trim('\r', '\n');
+                        inputBuffer.Clear();
+                        
+                        // Keep remaining data
+                        if (input.Length > newlineIdx + 1)
+                            inputBuffer.Append(input.Substring(newlineIdx + 1));
+
+                        if (string.IsNullOrEmpty(line)) continue;
+
+                        Log.Info($"[PipeServer] Received: {line}");
+                        string response = ProcessCommand(line);
+                        
+                        // Send response with newline
+                        byte[] responseBytes = Encoding.UTF8.GetBytes(response + "\n");
+                        await server.WriteAsync(responseBytes, token);
+                        await server.FlushAsync();
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
                 break;
-            }
-            catch (Exception ex) when (!_cts.IsCancellationRequested)
-            {
-                Log.Info($"[PipeServer] Connection error: {ex.Message}");
-                _pipe?.Dispose();
-                await Task.Delay(1000);
-            }
-        }
-    }
-
-    private async Task ListenLoopAsync()
-    {
-        if (_pipe == null) return;
-
-        var buffer = new byte[4096];
-        var streamReader = new StreamReader(_pipe, Encoding.UTF8);
-        var streamWriter = new StreamWriter(_pipe, Encoding.UTF8) { AutoFlush = true };
-
-        while (_pipe.IsConnected && !_cts.IsCancellationRequested && !_disposed)
-        {
-            try
-            {
-                var line = await streamReader.ReadLineAsync();
-                if (string.IsNullOrEmpty(line))
-                    continue;
-
-                var msg = PipeMessage.Deserialize(line);
-                Log.Info($"[PipeServer] Received: {msg.Command} | {msg.Payload.Substring(0, Math.Min(50, msg.Payload.Length))}");
-
-                await HandleMessageAsync(msg, streamWriter);
             }
             catch (Exception ex)
             {
-                Log.Info($"[PipeServer] Listen loop error: {ex.Message}");
-                break;
+                Log.Info($"[PipeServer] Error: {ex.Message}");
+                await Task.Delay(1000, token);
+            }
+            finally
+            {
+                server?.Dispose();
             }
         }
-
-        Log.Info("[PipeServer] Client disconnected");
-        _pipe?.Dispose();
     }
 
-    private async Task HandleMessageAsync(PipeMessage msg, StreamWriter writer)
+    private string ProcessCommand(string command)
     {
         try
         {
-            string? response = null;
-            MessageCommand responseCommand = MessageCommand.ACK;
+            var parts = command.Split(' ', 2, StringSplitOptions.TrimEntries);
+            string cmd = parts[0].ToUpperInvariant();
+            string? arg = parts.Length > 1 ? parts[1] : null;
 
-            switch (msg.Command)
+            switch (cmd)
             {
-                case MessageCommand.RESET:
-                    OnResetRequested?.Invoke(msg.Payload);
-                    responseCommand = MessageCommand.STATE;
-                    response = GetStateCallback?.Invoke();
-                    break;
-
-                case MessageCommand.STEP:
-                    if (int.TryParse(msg.Payload, out int action))
-                    {
-                        OnStepRequested?.Invoke(action);
-                    }
-                    responseCommand = MessageCommand.STATE;
-                    response = GetStateCallback?.Invoke();
-                    break;
-
-                case MessageCommand.GET_ACTION_MASK:
-                    responseCommand = MessageCommand.ACK;
-                    response = GetActionMaskCallback?.Invoke();
-                    break;
-
-                case MessageCommand.GET_STATE:
-                    responseCommand = MessageCommand.STATE;
-                    response = GetStateCallback?.Invoke();
-                    break;
-
-                case MessageCommand.CLOSE:
+                // Training commands
+                case "STATE":
+                    return GetStateCallback?.Invoke() ?? "{}";
+                
+                case "ACTION_MASK":
+                    return GetActionMaskCallback?.Invoke() ?? "[]";
+                
+                case "RESET":
+                    OnResetRequested?.Invoke();
+                    return "{\"status\":\"reset\"}";
+                
+                case "STEP":
+                    return OnStepRequested?.Invoke(arg ?? "") ?? "{}";
+                
+                case "CLOSE":
                     OnCloseRequested?.Invoke();
-                    return;
-
+                    return "{\"status\":\"closing\"}";
+                
+                // AI Control commands - use PolicyManager directly (works anytime)
+                case "PAUSE":
+                case "P":
+                    PolicyManager.Instance.TogglePause();
+                    return $"{{\"paused\":{PolicyManager.Instance.Paused.ToString().ToLower()}}}";
+                
+                case "MANUAL":
+                case "M":
+                    PolicyManager.Instance.ToggleManualMode();
+                    return $"{{\"manual\":{PolicyManager.Instance.ManualMode.ToString().ToLower()}}}";
+                
+                case "POLICY":
+                case "C":
+                    if (arg != null)
+                    {
+                        // Set specific policy
+                        if (Enum.TryParse<PolicyType>(arg, true, out var policyType))
+                        {
+                            PolicyManager.Instance.SetPolicy(policyType);
+                        }
+                    }
+                    else
+                    {
+                        // Cycle to next policy
+                        PolicyManager.Instance.CyclePolicy();
+                    }
+                    return $"{{\"policy\":\"{PolicyManager.Instance.CurrentType}\"}}";
+                
+                case "VERBOSE":
+                case "V":
+                    var dbgv = AIDebuggerRegistrar.Debugger;
+                    if (dbgv != null)
+                    {
+                        dbgv.ToggleVerboseLogging();
+                        return $"{{\"verbose\":{dbgv.VerboseLogging.ToString().ToLower()}}}";
+                    }
+                    return "{\"verbose\":false,\"note\":\"not in combat\"}";
+                
+                case "HISTORY":
+                case "H":
+                    AIDebuggerRegistrar.Debugger?.ShowHistory();
+                    return "{\"status\":\"history printed to log (requires combat)\"}";
+                
+                case "HELP":
+                case "?":
+                    return GetHelpText();
+                
+                case "STATUS":
+                case "S":
+                    return GetStatus();
+                
                 default:
-                    Log.Info($"[PipeServer] Unknown command: {msg.Command}");
-                    break;
-            }
-
-            if (response != null)
-            {
-                var responseMsg = new PipeMessage(responseCommand, response);
-                await writer.WriteLineAsync(responseMsg.Serialize());
-                Log.Info($"[PipeServer] Sent: {responseCommand} ({response.Length} chars)");
+                    return $"{{\"error\":\"unknown command: {cmd}\"}}";
             }
         }
         catch (Exception ex)
         {
-            Log.Info($"[PipeServer] Handle message error: {ex.Message}");
-            var errorMsg = new PipeMessage(MessageCommand.ERROR, ex.Message);
-            await writer.WriteLineAsync(errorMsg.Serialize());
+            return $"{{\"error\":\"{ex.Message}\"}}";
         }
     }
 
-    public void SendDone(bool won, int turns, int hpRemaining)
+    private string GetHelpText()
     {
-        if (!IsConnected || _pipe == null) return;
-
-        var doneJson = $"{{\"won\":{won.ToString().ToLower()},\"turns\":{turns},\"hp_remaining\":{hpRemaining}}}";
-        var msg = new PipeMessage(MessageCommand.DONE, doneJson);
-
-        try
-        {
-            using var writer = new StreamWriter(_pipe, Encoding.UTF8) { AutoFlush = true };
-            writer.WriteLine(msg.Serialize());
-            Log.Info($"[PipeServer] Sent DONE: {doneJson}");
-        }
-        catch (Exception ex)
-        {
-            Log.Info($"[PipeServer] Send done error: {ex.Message}");
-        }
+        return @"{
+  ""commands"": {
+    ""PAUSE/P"": ""Toggle AI pause"",
+    ""MANUAL/M"": ""Toggle manual mode"",
+    ""POLICY/C [type]"": ""Cycle or set policy (Heuristic/Simulation/Random)"",
+    ""VERBOSE/V"": ""Toggle verbose logging"",
+    ""HISTORY/H"": ""Show decision history"",
+    ""STATUS/S"": ""Get current status"",
+    ""STATE"": ""Get game state JSON"",
+    ""ACTION_MASK"": ""Get valid action mask"",
+    ""RESET"": ""Reset environment"",
+    ""STEP [action]"": ""Execute action"",
+    ""HELP/?"": ""Show this help""
+  }
+}";
     }
 
-    public void Dispose()
+    private string GetStatus()
     {
-        _disposed = true;
-        _cts.Cancel();
-
-        try
+        var dbg = AIDebuggerRegistrar.Debugger;
+        var stats = dbg?.GetStats();
+        
+        return System.Text.Json.JsonSerializer.Serialize(new
         {
-            _listenTask?.Wait(1000);
-        }
-        catch { }
-
-        _pipe?.Dispose();
-        _cts?.Dispose();
-
-        Log.Info("[PipeServer] Disposed");
+            policy = PolicyManager.Instance.CurrentType.ToString(),
+            paused = PolicyManager.Instance.Paused,
+            manual = PolicyManager.Instance.ManualMode,
+            verbose = dbg?.VerboseLogging ?? false,
+            turn = stats?.TurnNumber ?? 0,
+            actions = stats?.TotalActions ?? 0
+        });
     }
 }

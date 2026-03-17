@@ -76,16 +76,15 @@ public static class CombatHook
             return;
         }
 
-        // Check if paused via AIDebugger
-        var debugger = AIDebuggerRegistrar.Debugger;
-        if (debugger != null && debugger.Paused)
+        // Check if paused (uses PolicyManager - works even outside combat)
+        if (PolicyManager.Instance.Paused)
         {
             Log.Info("[CombatHook] AI paused, waiting...");
             return;
         }
 
         // Manual mode: don't auto-play
-        if (debugger != null && debugger.ManualMode)
+        if (PolicyManager.Instance.ManualMode)
         {
             Log.Info("[CombatHook] Manual mode active, no auto-play");
             return;
@@ -140,13 +139,9 @@ public static class CombatHook
 
             while (cardsPlayed < 20 && CombatManager.Instance.IsPlayPhase && CombatManager.Instance.IsInProgress)
             {
-                // Check pause/manual mode
-                var dbg = AIDebuggerRegistrar.Debugger;
-                if (dbg != null)
-                {
-                    if (dbg.Paused) break;
-                    if (dbg.ManualMode) break;
-                }
+                // Check pause/manual mode via PolicyManager
+                if (PolicyManager.Instance.Paused || PolicyManager.Instance.ManualMode)
+                    break;
 
                 // Refresh state
                 snapshot = GameStateReader.TryRead();
@@ -162,7 +157,7 @@ public static class CombatHook
                 }
 
                 // Update debugger
-                dbg?.Update(snapshot, decision, _turnCount);
+                AIDebuggerRegistrar.Debugger?.Update(snapshot, decision, _turnCount);
 
                 // Execute decision
                 if (decision.Type == ActionType.PlayCard && decision.Card != null)
