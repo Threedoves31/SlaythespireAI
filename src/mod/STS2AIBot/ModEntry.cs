@@ -59,12 +59,13 @@ public static class ModEntry
 }
 
 /// <summary>
-/// Registers AIDebugger to scene tree when combat starts.
+/// Registers UI components (AIDebugger + AIControlPanel) to scene tree.
 /// Uses Harmony Postfix to inject after SceneTree is ready.
 /// </summary>
 public static class AIDebuggerRegistrar
 {
     private static AIDebugger? _debugger;
+    private static AIControlPanel? _controlPanel;
     private static bool _registered = false;
 
     public static void Register()
@@ -73,7 +74,7 @@ public static class AIDebuggerRegistrar
         _registered = true;
 
         // Try immediate registration
-        TryRegisterDebugger();
+        TryRegisterUI();
 
         // Also hook into combat start as backup
         MegaCrit.Sts2.Core.Combat.CombatManager.Instance.TurnStarted += OnTurnStarted;
@@ -81,22 +82,34 @@ public static class AIDebuggerRegistrar
 
     private static void OnTurnStarted(MegaCrit.Sts2.Core.Combat.CombatState state)
     {
-        if (_debugger == null)
+        if (_debugger == null || _controlPanel == null)
         {
-            TryRegisterDebugger();
+            TryRegisterUI();
         }
     }
 
-    private static void TryRegisterDebugger()
+    private static void TryRegisterUI()
     {
         try
         {
             var sceneTree = Godot.Engine.GetMainLoop() as Godot.SceneTree;
             if (sceneTree?.Root != null)
             {
-                _debugger = new AIDebugger();
-                sceneTree.Root.AddChild(_debugger);
-                Log.Info("[STS2AIBot] AIDebugger registered to scene tree");
+                // Register debugger for hotkey handling
+                if (_debugger == null)
+                {
+                    _debugger = new AIDebugger();
+                    sceneTree.Root.AddChild(_debugger);
+                    Log.Info("[STS2AIBot] AIDebugger registered to scene tree");
+                }
+
+                // Register control panel for in-game UI
+                if (_controlPanel == null)
+                {
+                    _controlPanel = new AIControlPanel();
+                    sceneTree.Root.AddChild(_controlPanel);
+                    Log.Info("[STS2AIBot] AIControlPanel registered (Alt+G to toggle)");
+                }
             }
             else
             {
@@ -105,9 +118,10 @@ public static class AIDebuggerRegistrar
         }
         catch (System.Exception ex)
         {
-            Log.Info("[STS2AIBot] Failed to register AIDebugger: " + ex.Message);
+            Log.Info("[STS2AIBot] Failed to register UI: " + ex.Message);
         }
     }
 
     public static AIDebugger? Debugger => _debugger;
+    public static AIControlPanel? ControlPanel => _controlPanel;
 }

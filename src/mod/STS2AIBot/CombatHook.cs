@@ -156,8 +156,9 @@ public static class CombatHook
                     break;
                 }
 
-                // Update debugger
+                // Update debugger and control panel
                 AIDebuggerRegistrar.Debugger?.Update(snapshot, decision, _turnCount);
+                AIDebuggerRegistrar.ControlPanel?.UpdatePanel(snapshot, decision, _turnCount);
 
                 // Execute decision
                 if (decision.Type == ActionType.PlayCard && decision.Card != null)
