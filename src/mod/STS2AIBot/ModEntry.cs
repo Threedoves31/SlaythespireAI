@@ -95,20 +95,20 @@ public static class AIDebuggerRegistrar
             var sceneTree = Godot.Engine.GetMainLoop() as Godot.SceneTree;
             if (sceneTree?.Root != null)
             {
-                // Register debugger for hotkey handling
+                // Register debugger for hotkey handling (use CallDeferred to avoid "busy setting up children" error)
                 if (_debugger == null)
                 {
                     _debugger = new AIDebugger();
-                    sceneTree.Root.AddChild(_debugger);
-                    Log.Info("[STS2AIBot] AIDebugger registered to scene tree");
+                    sceneTree.Root.CallDeferred("add_child", _debugger);
+                    Log.Info("[STS2AIBot] AIDebugger registered to scene tree (deferred)");
                 }
 
-                // Register control panel for in-game UI
+                // Register control panel for in-game UI (use CallDeferred)
                 if (_controlPanel == null)
                 {
                     _controlPanel = new AIControlPanel();
-                    sceneTree.Root.AddChild(_controlPanel);
-                    Log.Info("[STS2AIBot] AIControlPanel registered (Alt+G to toggle)");
+                    sceneTree.Root.CallDeferred("add_child", _controlPanel);
+                    Log.Info("[STS2AIBot] AIControlPanel registered (Alt+G to toggle, deferred)");
                 }
             }
             else

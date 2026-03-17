@@ -11,3 +11,16 @@ E:\Programs\Slaythespire\mod\STS2AIBot\obj\Release\net9.0\STS2AIBot.dll
 E:\Programs\Slaythespire\mod\STS2AIBot\obj\Release\net9.0\refint\STS2AIBot.dll
 E:\Programs\Slaythespire\mod\STS2AIBot\obj\Release\net9.0\STS2AIBot.pdb
 E:\Programs\Slaythespire\mod\STS2AIBot\obj\Release\net9.0\ref\STS2AIBot.dll
+e:\Programs\SlaythespireAI\src\mod\STS2AIBot\bin\Release\net9.0\STS2AIBot.deps.json
+e:\Programs\SlaythespireAI\src\mod\STS2AIBot\bin\Release\net9.0\STS2AIBot.dll
+e:\Programs\SlaythespireAI\src\mod\STS2AIBot\bin\Release\net9.0\STS2AIBot.pdb
+e:\Programs\SlaythespireAI\src\mod\STS2AIBot\obj\Release\net9.0\STS2AIBot.csproj.AssemblyReference.cache
+e:\Programs\SlaythespireAI\src\mod\STS2AIBot\obj\Release\net9.0\STS2AIBot.GeneratedMSBuildEditorConfig.editorconfig
+e:\Programs\SlaythespireAI\src\mod\STS2AIBot\obj\Release\net9.0\STS2AIBot.AssemblyInfoInputs.cache
+e:\Programs\SlaythespireAI\src\mod\STS2AIBot\obj\Release\net9.0\STS2AIBot.AssemblyInfo.cs
+e:\Programs\SlaythespireAI\src\mod\STS2AIBot\obj\Release\net9.0\STS2AIBot.csproj.CoreCompileInputs.cache
+e:\Programs\SlaythespireAI\src\mod\STS2AIBot\obj\Release\net9.0\STS2AIBot.sourcelink.json
+e:\Programs\SlaythespireAI\src\mod\STS2AIBot\obj\Release\net9.0\STS2AIBot.dll
+e:\Programs\SlaythespireAI\src\mod\STS2AIBot\obj\Release\net9.0\refint\STS2AIBot.dll
+e:\Programs\SlaythespireAI\src\mod\STS2AIBot\obj\Release\net9.0\STS2AIBot.pdb
+e:\Programs\SlaythespireAI\src\mod\STS2AIBot\obj\Release\net9.0\ref\STS2AIBot.dll

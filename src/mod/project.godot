@@ -1,0 +1,20 @@
+; Godot project configuration for STS2 AI Bot mod
+; This file enables Godot to recognize the mod as a project and export PCK files
+
+config_version=5
+
+[application]
+config/name="STS2AIBot"
+config/description="Reinforcement Learning AI for Slay the Spire 2"
+config/version="1.4.6"
+
+[dotnet]
+project/assembly_name="STS2AIBot"
+
+[rendering]
+
+[autoload]
+
+[gdnative]
+
+[plugins]

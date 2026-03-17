@@ -227,6 +227,10 @@ public partial class AIControlPanel : Control
 
     private void UpdateStatus()
     {
+        // Guard: UI not ready yet (deferred add_child)
+        if (_statusLabel == null || _btnPause == null || _btnManual == null)
+            return;
+            
         var pm = PolicyManager.Instance;
         string status = $"Policy: {pm.CurrentPolicy.Name}";
         
