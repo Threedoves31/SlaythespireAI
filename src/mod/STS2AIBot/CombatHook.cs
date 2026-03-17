@@ -31,8 +31,6 @@ public static class CombatHook
 {
     private static bool _isRunning = false;
     private static GameEnvironment? _gameEnv;
-    private static DebugWindow? _debugWindow;
-    private static AIController? _aiController;
     private static DecisionEngine? _decisionEngine;  // For potion logic
 
     private static int _turnCount = 0;
@@ -42,23 +40,15 @@ public static class CombatHook
     public static void Register()
     {
         // Initialize components
-        _debugWindow = new DebugWindow();
         _decisionEngine = new DecisionEngine();
 
         // Register combat hook
         CombatManager.Instance.TurnStarted += OnTurnStarted;
 
-        // Initialize AI controller (for manual override)
-        _aiController = new AIController(_debugWindow, _decisionEngine);
-        _aiController.Initialize();
-
-        // Register F2 hotkey for policy cycling
+        // Register policy change callback
         PolicyManager.Instance.OnPolicyChanged += OnPolicyChanged;
 
-        Log.Info("[CombatHook] Enhanced combat hook registered");
-        Log.Info("[CombatHook] Press F2 to cycle AI policies");
-        Log.Info("[CombatHook] Press F3 to toggle pause");
-        Log.Info("[CombatHook] Press F4 to toggle manual mode");
+        Log.Info("[CombatHook] Combat hook registered");
         Log.Info($"[CombatHook] Current policy: {PolicyManager.Instance.GetStatusString()}");
     }
 
@@ -72,7 +62,6 @@ public static class CombatHook
     private static void OnPolicyChanged(PolicyType newType)
     {
         Log.Info($"[CombatHook] Policy changed to: {newType}");
-        _debugWindow?.ShowMessage($"Policy: {newType}");
     }
 
     private static void OnTurnStarted(CombatState state)
@@ -87,15 +76,15 @@ public static class CombatHook
             return;
         }
 
-        // Check if paused
-        if (_debugWindow != null && _debugWindow.Paused)
+        // Check if paused via AIDebugger
+        if (AIDebugger.Instance != null && AIDebugger.Instance.Paused)
         {
-            Log.Info("[CombatHook] AI paused, waiting for manual input");
+            Log.Info("[CombatHook] AI paused, waiting...");
             return;
         }
 
         // Manual mode: don't auto-play
-        if (_debugWindow != null && _debugWindow.ManualMode)
+        if (AIDebugger.Instance != null && AIDebugger.Instance.ManualMode)
         {
             Log.Info("[CombatHook] Manual mode active, no auto-play");
             return;
@@ -135,9 +124,6 @@ public static class CombatHook
                 return;
             }
 
-            // Update debug window
-            _debugWindow?.Update(snapshot, null, _turnCount);
-
             // Use potions before playing cards (using legacy DecisionEngine for now)
             await UsePotionsAsync(player, snapshot);
 
@@ -150,11 +136,15 @@ public static class CombatHook
 
             // Play cards using current policy
             int cardsPlayed = 0;
-            var attempted = new HashSet<string>();
 
             while (cardsPlayed < 20 && CombatManager.Instance.IsPlayPhase && CombatManager.Instance.IsInProgress)
             {
-                if (_debugWindow != null && _debugWindow.Paused) break;
+                // Check pause/manual mode
+                if (AIDebugger.Instance != null)
+                {
+                    if (AIDebugger.Instance.Paused) break;
+                    if (AIDebugger.Instance.ManualMode) break;
+                }
 
                 // Refresh state
                 snapshot = GameStateReader.TryRead();
@@ -169,14 +159,15 @@ public static class CombatHook
                     break;
                 }
 
+                // Update debugger
+                AIDebugger.Instance?.Update(snapshot, decision, _turnCount);
+
                 // Execute decision
                 if (decision.Type == ActionType.PlayCard && decision.Card != null)
                 {
                     var card = FindCardById(player, decision.Card.Id);
                     if (card != null && decision.Card.EnergyCost <= player.PlayerCombatState?.Energy)
                     {
-                        attempted.Add(decision.Card.Id + card.GetHashCode());
-
                         // Get target
                         Creature? target = null;
                         if (decision.Target != null)
@@ -185,8 +176,8 @@ public static class CombatHook
                         }
 
                         // Log action
-                        Log.Info($"[CombatHook] [{PolicyManager.Instance.CurrentType}] Playing {decision.Card.Id} -> {decision.Target?.Id ?? "none"}");
-                        Log.Info($"[CombatHook] Reason: {decision.Reason}");
+                        Log.Info($"[CombatHook] [{PolicyManager.Instance.CurrentType}] " +
+                                 $"Playing {decision.Card.Id} -> {decision.Target?.Id ?? "none"}");
 
                         // Play card
                         await CardCmd.AutoPlay(new BlockingPlayerChoiceContext(), card, target);
@@ -297,14 +288,5 @@ public static class CombatHook
     {
         return combatState.Enemies.FirstOrDefault(e =>
             e.Monster?.Id.Entry == enemyId && e.IsAlive);
-    }
-
-    /// <summary>
-    /// Handle F2 key press to cycle policies.
-    /// Called from UI/AIController.
-    /// </summary>
-    public static void CyclePolicy()
-    {
-        PolicyManager.Instance.CyclePolicy();
     }
 }

@@ -35,10 +35,37 @@ public class HeuristicPolicy : IPolicy
     private const int DAMAGE_TOLERANCE = 4;      // Tolerate up to 4 damage before defending
     private const int LOW_HP_THRESHOLD = 20;     // Avoid HP-cost cards below this
 
-    // Card knowledge sets
+    // Card knowledge sets - HP cost cards categorized by benefit type
     private static readonly HashSet<string> HpCostCards = new()
     {
         "Hemokinesis", "Offering", "Bloodletting", "Rupture"
+    };
+
+    // HP-for-energy cards (gain energy)
+    private static readonly HashSet<string> HpForEnergyCards = new()
+    {
+        "Offering", "Bloodletting"
+    };
+
+    // HP-for-draw cards (draw cards)
+    private static readonly HashSet<string> HpForDrawCards = new()
+    {
+        "Offering"  // Offering gives both energy AND draw
+    };
+
+    // HP-for-damage cards (high damage attack)
+    private static readonly HashSet<string> HpForDamageCards = new()
+    {
+        "Hemokinesis"  // 15 damage for 2 HP
+    };
+
+    // Card benefit data: (hpCost, energyGain, drawAmount, damageBonus)
+    private static readonly Dictionary<string, (int hpCost, int energyGain, int drawCards, int bonusDamage)> HpCostCardData = new()
+    {
+        { "Offering", (6, 2, 3, 0) },       // Lose 6 HP, gain 2 energy, draw 3 cards
+        { "Bloodletting", (3, 2, 0, 0) },   // Lose 3 HP, gain 2 energy
+        { "Hemokinesis", (2, 0, 0, 15) },   // Lose 2 HP, deal 15 damage (instead of normal)
+        { "Rupture", (1, 0, 0, 0) }         // Lose 1 HP when attacked (passive power)
     };
 
     private static readonly HashSet<string> VulnerableCards = new()
@@ -128,7 +155,11 @@ public class HeuristicPolicy : IPolicy
             if (attackDecision != null) return attackDecision;
         }
 
-        // === Priority 8: Any remaining useful card ===
+        // === Priority 8: Consider HP-cost cards (smart decision) ===
+        var hpCostDecision = TryHpCostCards(playable, aliveEnemies, state, incomingDamage);
+        if (hpCostDecision != null) return hpCostDecision;
+
+        // === Priority 9: Any remaining useful card ===
         var anyDecision = TryAnyUsefulCard(playable, aliveEnemies, state, lowHp);
         if (anyDecision != null) return anyDecision;
 
@@ -358,6 +389,148 @@ public class HeuristicPolicy : IPolicy
                 var card = cardsOfType.First();
                 var target = (ctype == "Attack") ? enemies.OrderBy(e => e.Hp).FirstOrDefault() : null;
                 return PlayCard(card, target, 5f, $"Play remaining: {card.Id}");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Smart decision for HP-cost cards (Hemokinesis, Offering, Bloodletting).
+    /// 
+    /// Rules:
+    /// 1. HP-for-energy: Only use if we need energy AND have good cards to play
+    /// 2. HP-for-draw: Only use if hand is low AND enemy threat is manageable
+    /// 3. HP-for-damage: Only use if it can kill or we're safe
+    /// 4. Never use if HP would drop below 10 after cost
+    /// </summary>
+    private PolicyDecision? TryHpCostCards(List<CardInfo> playable, List<EnemyInfo> enemies,
+                                          CombatSnapshot state, int incomingDamage)
+    {
+        // Never use HP-cost cards if HP is critical
+        if (state.PlayerHp <= 10) return null;
+
+        var hpCostCards = playable.Where(c =>
+        {
+            string baseId = c.Id.Replace("+", "");
+            return HpCostCards.Contains(baseId);
+        }).ToList();
+
+        if (!hpCostCards.Any()) return null;
+
+        foreach (var card in hpCostCards)
+        {
+            string baseId = card.Id.Replace("+", "");
+            
+            if (!HpCostCardData.TryGetValue(baseId, out var data))
+                continue;
+
+            // Check if HP after cost is safe
+            int hpAfter = state.PlayerHp - data.hpCost;
+            if (hpAfter <= 10) continue;
+
+            // === HP-for-energy cards (Offering, Bloodletting) ===
+            if (HpForEnergyCards.Contains(baseId))
+            {
+                // Don't use if we already have enough energy
+                if (state.PlayerEnergy >= 3)
+                {
+                    if (_debugMode)
+                        Log.Info($"[Heuristic] Skip {baseId}: already have {state.PlayerEnergy} energy");
+                    continue;
+                }
+
+                // Check if we have expensive cards in hand that need the energy
+                var expensiveCards = state.Hand.Where(c => 
+                    c.IsPlayable && c.EnergyCost >= 2 && !HpCostCards.Contains(c.Id.Replace("+", ""))).ToList();
+                
+                if (!expensiveCards.Any() && state.PlayerEnergy >= 1)
+                {
+                    if (_debugMode)
+                        Log.Info($"[Heuristic] Skip {baseId}: no expensive cards to play");
+                    continue;
+                }
+
+                // Safe to use: enemy not attacking or we have block
+                bool isSafe = incomingDamage <= DAMAGE_TOLERANCE || state.PlayerBlock >= incomingDamage;
+                if (!isSafe && hpAfter <= 15)
+                {
+                    if (_debugMode)
+                        Log.Info($"[Heuristic] Skip {baseId}: unsafe (incoming={incomingDamage}, hpAfter={hpAfter})");
+                    continue;
+                }
+
+                return PlayCard(card, null, 8f, 
+                    $"HP-for-energy: {baseId} (+{data.energyGain} energy, -{data.hpCost} HP)");
+            }
+
+            // === HP-for-draw cards (Offering) ===
+            if (HpForDrawCards.Contains(baseId))
+            {
+                // Only draw if hand is low
+                if (state.Hand.Count >= 5)
+                {
+                    if (_debugMode)
+                        Log.Info($"[Heuristic] Skip {baseId}: hand already full ({state.Hand.Count} cards)");
+                    continue;
+                }
+
+                // Evaluate if we need more options
+                var usefulCards = state.Hand.Where(c => 
+                    c.IsPlayable && c.EnergyCost <= state.PlayerEnergy).Count();
+                
+                if (usefulCards >= 3)
+                {
+                    if (_debugMode)
+                        Log.Info($"[Heuristic] Skip {baseId}: enough useful cards ({usefulCards})");
+                    continue;
+                }
+
+                // Safe to use: enemy not attacking or we have block
+                bool isSafe = incomingDamage <= DAMAGE_TOLERANCE || state.PlayerBlock >= incomingDamage;
+                if (!isSafe)
+                {
+                    if (_debugMode)
+                        Log.Info($"[Heuristic] Skip {baseId}: enemy attacking, unsafe to burn HP");
+                    continue;
+                }
+
+                return PlayCard(card, null, 7f,
+                    $"HP-for-draw: {baseId} (+{data.drawCards} cards, -{data.hpCost} HP)");
+            }
+
+            // === HP-for-damage cards (Hemokinesis) ===
+            if (HpForDamageCards.Contains(baseId))
+            {
+                int strength = GetStrength(state);
+                int dmg = data.bonusDamage + strength;
+
+                // Check if it can one-shot an enemy
+                foreach (var enemy in enemies)
+                {
+                    if (dmg >= enemy.Hp)
+                    {
+                        return PlayCard(card, enemy, 90f,
+                            $"HP-for-kill: {baseId} kills {enemy.Id} (-{data.hpCost} HP)");
+                    }
+                }
+
+                // Safe to use for damage if enemy not attacking
+                bool isSafe = incomingDamage <= DAMAGE_TOLERANCE || state.PlayerBlock >= incomingDamage;
+                if (!isSafe)
+                {
+                    if (_debugMode)
+                        Log.Info($"[Heuristic] Skip {baseId}: enemy attacking, save HP for defense");
+                    continue;
+                }
+
+                // Use if enemy has high HP and we're safe
+                var highestHpEnemy = enemies.OrderByDescending(e => e.Hp).First();
+                if (highestHpEnemy.Hp >= 20)
+                {
+                    return PlayCard(card, highestHpEnemy, 6f,
+                        $"HP-for-damage: {baseId} -> {highestHpEnemy.Id} ({dmg} dmg, -{data.hpCost} HP)");
+                }
             }
         }
 
