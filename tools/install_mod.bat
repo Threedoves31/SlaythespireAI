@@ -7,9 +7,11 @@ echo      STS2 AI Bot - 一键编译安装脚本 (Python PCK)
 echo ====================================================
 echo.
 
-:: 配置路径
-set "PROJECT_DIR=%~dp0src\mod\STS2AIBot"
-set "MOD_DIR=%~dp0src\mod"
+:: 配置路径 (脚本在 tools/ 目录，需要回到项目根目录)
+set "ROOT_DIR=%~dp0.."
+set "PROJECT_DIR=%ROOT_DIR%\src\mod\STS2AIBot"
+set "MOD_DIR=%ROOT_DIR%\src\mod"
+set "SCRIPTS_DIR=%ROOT_DIR%\src\scripts"
 set "INSTALL_DIR=D:\Steam\steamapps\common\Slay the Spire 2\mods\STS2AIBot"
 
 :: 步骤 1: 编译 C# DLL
@@ -27,7 +29,7 @@ echo.
 
 :: 步骤 2: 生成 PCK (Python)
 echo [2/4] 生成 PCK 文件...
-cd /d "%~dp0"
+cd /d "%SCRIPTS_DIR%"
 python create_pck.py
 if errorlevel 1 (
     echo [错误] PCK 生成失败！
