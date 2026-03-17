@@ -85,7 +85,11 @@ public class PolicyManager
     /// </summary>
     public void SetPolicy(PolicyType type)
     {
-        if (type == _currentType) return;
+        if (type == _currentType)
+        {
+            Log.Info($"[PolicyManager] Policy already set to {type}");
+            return;
+        }
 
         _currentPolicy = type switch
         {
@@ -97,7 +101,7 @@ public class PolicyManager
         _currentType = type;
 
         OnPolicyChanged?.Invoke(type);
-        Log.Info($"[PolicyManager] Switched to {type} policy");
+        Log.Info($"[PolicyManager] === POLICY CHANGED: {_currentPolicy.Name} ({type}) ===");
     }
 
     public void TogglePause()

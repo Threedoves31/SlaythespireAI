@@ -149,8 +149,12 @@ public class PipeServer
                 // AI Control commands - use PolicyManager directly (works anytime)
                 case "PAUSE":
                 case "P":
+                    bool previousPaused = PolicyManager.Instance.Paused;
                     PolicyManager.Instance.TogglePause();
-                    return $"{{\"paused\":{PolicyManager.Instance.Paused.ToString().ToLower()}}}";
+                    bool currentPaused = PolicyManager.Instance.Paused;
+                    string msg = currentPaused ? "AI paused" : "AI resumed";
+                    Log.Info($"[PipeServer] PAUSE toggled: {previousPaused} -> {currentPaused}");
+                    return $"{{\"paused\":{currentPaused.ToString().ToLower()},\"message\":\"{msg}\"}}";
                 
                 case "MANUAL":
                 case "M":
@@ -159,20 +163,27 @@ public class PipeServer
                 
                 case "POLICY":
                 case "C":
+                    string previousPolicy = PolicyManager.Instance.CurrentType.ToString();
                     if (arg != null)
                     {
                         // Set specific policy
                         if (Enum.TryParse<PolicyType>(arg, true, out var policyType))
                         {
                             PolicyManager.Instance.SetPolicy(policyType);
+                            Log.Info($"[PipeServer] Policy set to: {policyType}");
+                        }
+                        else
+                        {
+                            return $"{{\"error\":\"unknown policy: {arg}. Valid: Heuristic, Simulation, Random\"}}";
                         }
                     }
                     else
                     {
                         // Cycle to next policy
                         PolicyManager.Instance.CyclePolicy();
+                        Log.Info($"[PipeServer] Policy cycled: {previousPolicy} -> {PolicyManager.Instance.CurrentType}");
                     }
-                    return $"{{\"policy\":\"{PolicyManager.Instance.CurrentType}\"}}";
+                    return $"{{\"previous\":\"{previousPolicy}\",\"current\":\"{PolicyManager.Instance.CurrentType}\",\"name\":\"{PolicyManager.Instance.CurrentPolicy.Name}\"}}";
                 
                 case "VERBOSE":
                 case "V":

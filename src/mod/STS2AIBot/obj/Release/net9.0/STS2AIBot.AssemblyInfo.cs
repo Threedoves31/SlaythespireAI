@@ -12,11 +12,11 @@ using System.Reflection;
 
 [assembly: System.Reflection.AssemblyCompanyAttribute("STS2AIBot")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
-[assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b20c5ecc3f837acaefd6effe86d979606b350cf4")]
+[assembly: System.Reflection.AssemblyFileVersionAttribute("1.3.6.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.4.3-2-g459e2fb+459e2fb282b194d5dbf9e2d25ff3e132638543ba")]
 [assembly: System.Reflection.AssemblyProductAttribute("STS2AIBot")]
 [assembly: System.Reflection.AssemblyTitleAttribute("STS2AIBot")]
-[assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
+[assembly: System.Reflection.AssemblyVersionAttribute("1.3.6.0")]
 
 // 由 MSBuild WriteCodeFragment 类生成。
 

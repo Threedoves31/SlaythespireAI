@@ -80,6 +80,7 @@ public static class CombatHook
         if (PolicyManager.Instance.Paused)
         {
             Log.Info("[CombatHook] AI paused, waiting...");
+            _isRunning = false;  // Reset flag so AI can resume when unpaused
             return;
         }
 
@@ -91,7 +92,13 @@ public static class CombatHook
         }
 
         // AI mode
-        if (_isRunning) return;
+        // Note: _isRunning is reset in finally block of PlayTurnAsync
+        // If paused during PlayTurnAsync, it breaks out and resets _isRunning
+        if (_isRunning) 
+        {
+            Log.Info("[CombatHook] AI already running, skipping");
+            return;
+        }
         _isRunning = true;
 
         // Fire-and-forget async task
