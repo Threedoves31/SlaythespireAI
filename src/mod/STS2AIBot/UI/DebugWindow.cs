@@ -4,7 +4,6 @@ using System.Linq;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIBot.AI;
 using STS2AIBot.StateExtractor;
-using static STS2AIBot.AI.DecisionEngine;
 
 namespace STS2AIBot.UI;
 
@@ -15,7 +14,7 @@ namespace STS2AIBot.UI;
 public class DebugWindow
 {
     private CombatSnapshot? _lastState;
-    private Decision? _lastDecision;
+    private PolicyDecision? _lastDecision;
     private int _turnCount = 0;
     private List<string> _actionLog = new();
     private List<RatingEntry> _ratings = new();
@@ -28,7 +27,7 @@ public class DebugWindow
     /// <summary>
     /// Update the debug window with new state and decision.
     /// </summary>
-    public void Update(CombatSnapshot? state, Decision? decision, int turnNumber)
+    public void Update(CombatSnapshot? state, PolicyDecision? decision, int turnNumber)
     {
         if (state != null)
         {
@@ -124,9 +123,9 @@ public class DebugWindow
 
         string typeSymbol = _lastDecision.Type switch
         {
-            ActionType.PlayCard => "🎴",
-            ActionType.EndTurn => "⏹",
-            ActionType.UsePotion => "🧪",
+            STS2AIBot.AI.ActionType.PlayCard => "🎴",
+            STS2AIBot.AI.ActionType.EndTurn => "⏹",
+            STS2AIBot.AI.ActionType.UsePotion => "🧪",
             _ => "❓"
         };
 
@@ -189,7 +188,7 @@ public class DebugWindow
     /// </summary>
     public void RateLastAction(int stars)
     {
-        if (_lastDecision == null || _lastDecision.Type != ActionType.PlayCard) return;
+        if (_lastDecision == null || _lastDecision.Type != STS2AIBot.AI.ActionType.PlayCard) return;
 
         _ratings.Add(new RatingEntry
         {
@@ -213,6 +212,14 @@ public class DebugWindow
             Ratings = _ratings.ToList(),
             AverageRating = _ratings.Count > 0 ? (float)_ratings.Average(r => r.Stars) : 0f
         };
+    }
+
+    /// <summary>
+    /// Show a message in the debug window.
+    /// </summary>
+    public void ShowMessage(string message)
+    {
+        Log.Info($"[DebugWindow] {message}");
     }
 
     /// <summary>

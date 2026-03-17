@@ -1,3 +1,6 @@
+// Combat Hook - Intercepts combat turns and executes AI decisions.
+// Uses PolicyManager for pluggable AI strategies.
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,29 +11,29 @@ using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
-using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using STS2AIBot.StateExtractor;
 using STS2AIBot.Communication;
 using STS2AIBot.AI;
 using STS2AIBot.UI;
+using Godot;
 
 namespace STS2AIBot;
 
 /// <summary>
-/// Enhanced combat hook with improved AI decision engine and debug controls.
-/// Supports multiple strategies, manual rating, and in-game controls.
+/// Enhanced combat hook with pluggable AI policies.
+/// Supports multiple strategies via PolicyManager, hot-swappable at runtime.
 /// </summary>
 public static class CombatHook
 {
     private static bool _isRunning = false;
     private static GameEnvironment? _gameEnv;
-    private static DecisionEngine? _decisionEngine;
     private static DebugWindow? _debugWindow;
     private static AIController? _aiController;
-    private static DecisionEngine.DecisionStrategy _strategy = DecisionEngine.DecisionStrategy.SimpleHeuristic;
+    private static DecisionEngine? _decisionEngine;  // For potion logic
 
     private static int _turnCount = 0;
     private static List<CardModel> _playedThisTurn = new();
@@ -41,18 +44,22 @@ public static class CombatHook
         // Initialize components
         _debugWindow = new DebugWindow();
         _decisionEngine = new DecisionEngine();
-        _aiController = new AIController(_debugWindow, _decisionEngine);
 
         // Register combat hook
         CombatManager.Instance.TurnStarted += OnTurnStarted;
 
-        // Initialize controller (for manual override)
+        // Initialize AI controller (for manual override)
+        _aiController = new AIController(_debugWindow, _decisionEngine);
         _aiController.Initialize();
 
+        // Register F2 hotkey for policy cycling
+        PolicyManager.Instance.OnPolicyChanged += OnPolicyChanged;
+
         Log.Info("[CombatHook] Enhanced combat hook registered");
-        Log.Info("[CombatHook] Press F2 in-game to cycle strategies");
+        Log.Info("[CombatHook] Press F2 to cycle AI policies");
         Log.Info("[CombatHook] Press F3 to toggle pause");
         Log.Info("[CombatHook] Press F4 to toggle manual mode");
+        Log.Info($"[CombatHook] Current policy: {PolicyManager.Instance.GetStatusString()}");
     }
 
     public static void Register(GameEnvironment gameEnv)
@@ -60,6 +67,12 @@ public static class CombatHook
         _gameEnv = gameEnv;
         CombatManager.Instance.TurnStarted += OnTurnStarted;
         Log.Info("[CombatHook] CombatHook registered (training mode)");
+    }
+
+    private static void OnPolicyChanged(PolicyType newType)
+    {
+        Log.Info($"[CombatHook] Policy changed to: {newType}");
+        _debugWindow?.ShowMessage($"Policy: {newType}");
     }
 
     private static void OnTurnStarted(CombatState state)
@@ -92,7 +105,7 @@ public static class CombatHook
         if (_isRunning) return;
         _isRunning = true;
 
-        // Fire-and-forget async task — same pattern as AutoSlayer
+        // Fire-and-forget async task
         var task = PlayTurnAsync(state);
         MegaCrit.Sts2.Core.Helpers.TaskHelper.RunSafely(task);
     }
@@ -122,17 +135,20 @@ public static class CombatHook
                 return;
             }
 
-            // Update debug window with initial state
+            // Update debug window
             _debugWindow?.Update(snapshot, null, _turnCount);
 
-            // Use potions before playing cards
+            // Use potions before playing cards (using legacy DecisionEngine for now)
             await UsePotionsAsync(player, snapshot);
 
             // Refresh state after potions
             snapshot = GameStateReader.TryRead();
             if (snapshot == null) return;
 
-            // Play cards until decision says to end
+            // Notify policy of turn start
+            PolicyManager.Instance.CurrentPolicy.OnTurnStart(snapshot, _turnCount);
+
+            // Play cards using current policy
             int cardsPlayed = 0;
             var attempted = new HashSet<string>();
 
@@ -140,8 +156,12 @@ public static class CombatHook
             {
                 if (_debugWindow != null && _debugWindow.Paused) break;
 
-                // Get AI decision
-                var decision = _decisionEngine?.MakeDecision(snapshot);
+                // Refresh state
+                snapshot = GameStateReader.TryRead();
+                if (snapshot == null) break;
+
+                // Get AI decision from PolicyManager
+                var decision = PolicyManager.Instance.MakeDecision(snapshot);
 
                 if (decision == null)
                 {
@@ -150,8 +170,7 @@ public static class CombatHook
                 }
 
                 // Execute decision
-                if (decision.Type == DecisionEngine.ActionType.PlayCard &&
-                    decision.Card != null)
+                if (decision.Type == ActionType.PlayCard && decision.Card != null)
                 {
                     var card = FindCardById(player, decision.Card.Id);
                     if (card != null && decision.Card.EnergyCost <= player.PlayerCombatState?.Energy)
@@ -166,7 +185,7 @@ public static class CombatHook
                         }
 
                         // Log action
-                        Log.Info($"[CombatHook] Playing {decision.Card.Id} -> {decision.Target?.Id ?? "none"}");
+                        Log.Info($"[CombatHook] [{PolicyManager.Instance.CurrentType}] Playing {decision.Card.Id} -> {decision.Target?.Id ?? "none"}");
                         Log.Info($"[CombatHook] Reason: {decision.Reason}");
 
                         // Play card
@@ -177,15 +196,15 @@ public static class CombatHook
 
                         // Wait for animation
                         await Task.Delay(100);
-
-                        // Refresh state
-                        snapshot = GameStateReader.TryRead();
-                        if (snapshot == null) break;
+                    }
+                    else
+                    {
+                        Log.Info($"[CombatHook] Could not play {decision.Card.Id}: card not found or insufficient energy");
                     }
                 }
-                else if (decision.Type == DecisionEngine.ActionType.EndTurn)
+                else if (decision.Type == ActionType.EndTurn)
                 {
-                    Log.Info("[CombatHook] Ending turn");
+                    Log.Info($"[CombatHook] [{PolicyManager.Instance.CurrentType}] Ending turn: {decision.Reason}");
                     break;
                 }
                 else
@@ -195,17 +214,11 @@ public static class CombatHook
                 }
             }
 
-            // Record turn outcome
-            var finalSnapshot = GameStateReader.TryRead();
-            if (finalSnapshot != null)
+            // Notify policy of turn end
+            snapshot = GameStateReader.TryRead();
+            if (snapshot != null)
             {
-                bool turnSuccessful = finalSnapshot.PlayerHp > _previousPlayerHp ||
-                                    !finalSnapshot.Enemies.Any(e => e.Hp > 0);
-                _decisionEngine?.RecordDecision(
-                    new DecisionEngine.Decision(DecisionEngine.ActionType.EndTurn, null, null, 0f, "Turn ended"),
-                    finalSnapshot,
-                    turnSuccessful
-                );
+                PolicyManager.Instance.CurrentPolicy.OnTurnEnd(snapshot, _turnCount);
             }
 
             // End turn
@@ -284,5 +297,14 @@ public static class CombatHook
     {
         return combatState.Enemies.FirstOrDefault(e =>
             e.Monster?.Id.Entry == enemyId && e.IsAlive);
+    }
+
+    /// <summary>
+    /// Handle F2 key press to cycle policies.
+    /// Called from UI/AIController.
+    /// </summary>
+    public static void CyclePolicy()
+    {
+        PolicyManager.Instance.CyclePolicy();
     }
 }
