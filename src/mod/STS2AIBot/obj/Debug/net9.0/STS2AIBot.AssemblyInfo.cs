@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("STS2AIBot")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.3.6.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("7a43611+7a43611e39c237e97c537824bbe1ca5141ce40aa")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("3f465d4+3f465d46c7e65f6d1f2192a2bc272d3191250064")]
 [assembly: System.Reflection.AssemblyProductAttribute("STS2AIBot")]
 [assembly: System.Reflection.AssemblyTitleAttribute("STS2AIBot")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.3.6.0")]

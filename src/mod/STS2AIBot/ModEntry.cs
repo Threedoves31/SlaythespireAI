@@ -4,7 +4,6 @@ using MegaCrit.Sts2.Core.Logging;
 using STS2AIBot.Communication;
 using STS2AIBot.UI;
 using System.Reflection;
-using Godot;
 
 namespace STS2AIBot;
 
@@ -18,9 +17,10 @@ public static class ModEntry
     {
         var harmony = new Harmony("sts2aibot");
         harmony.PatchAll();
-        var version = Assembly.GetExecutingAssembly()
+        
+        string version = Assembly.GetExecutingAssembly()
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
-        Log.Info($"[STS2AIBot] STS2 AI Bot v{version} initialized");
+        Log.Info("[STS2AIBot] STS2 AI Bot v" + version + " initialized");
 
         // Initialize training environment
         GameEnv = new GameEnvironment();
@@ -31,8 +31,8 @@ public static class ModEntry
         PipeServer.OnStepRequested += GameEnv.Step;
         PipeServer.OnCloseRequested += () => Log.Info("[PipeServer] Close requested");
 
-        PipeServer.GetStateCallback = GameEnv!.GetState;
-        PipeServer.GetActionMaskCallback = GameEnv!.GetActionMask;
+        PipeServer.GetStateCallback = GameEnv.GetState;
+        PipeServer.GetActionMaskCallback = GameEnv.GetActionMask;
 
         // Start pipe server
         PipeServer.Start();
@@ -43,26 +43,61 @@ public static class ModEntry
         // Register combat hooks
         CombatHook.Register();
 
-        // Register AIDebugger node to scene tree for keyboard input
-        RegisterAIDebugger();
+        // Register AIDebugger using Harmony patch for delayed initialization
+        AIDebuggerRegistrar.Register();
+    }
+}
+
+/// <summary>
+/// Registers AIDebugger to scene tree when combat starts.
+/// Uses Harmony Postfix to inject after SceneTree is ready.
+/// </summary>
+public static class AIDebuggerRegistrar
+{
+    private static AIDebugger? _debugger;
+    private static bool _registered = false;
+
+    public static void Register()
+    {
+        if (_registered) return;
+        _registered = true;
+
+        // Try immediate registration
+        TryRegisterDebugger();
+
+        // Also hook into combat start as backup
+        MegaCrit.Sts2.Core.Combat.CombatManager.Instance.TurnStarted += OnTurnStarted;
     }
 
-    private static void RegisterAIDebugger()
+    private static void OnTurnStarted(MegaCrit.Sts2.Core.Combat.CombatState state)
     {
-        // Create and add AIDebugger to the scene tree
-        // This is needed for _UnhandledKeyInput to work
-        var debugger = new AIDebugger();
-        
-        // Use SceneTree autoload or add to root
-        var sceneTree = Engine.GetMainLoop() as SceneTree;
-        if (sceneTree?.Root != null)
+        if (_debugger == null)
         {
-            sceneTree.Root.AddChild(debugger);
-            Log.Info("[STS2AIBot] AIDebugger registered to scene tree");
-        }
-        else
-        {
-            Log.Info("[STS2AIBot] Warning: Could not register AIDebugger - scene tree not available");
+            TryRegisterDebugger();
         }
     }
+
+    private static void TryRegisterDebugger()
+    {
+        try
+        {
+            var sceneTree = Godot.Engine.GetMainLoop() as Godot.SceneTree;
+            if (sceneTree?.Root != null)
+            {
+                _debugger = new AIDebugger();
+                sceneTree.Root.AddChild(_debugger);
+                Log.Info("[STS2AIBot] AIDebugger registered to scene tree");
+            }
+            else
+            {
+                Log.Info("[STS2AIBot] Scene tree not ready yet, will retry on combat start");
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Log.Info("[STS2AIBot] Failed to register AIDebugger: " + ex.Message);
+        }
+    }
+
+    public static AIDebugger? Debugger => _debugger;
 }

@@ -44,60 +44,103 @@ public partial class AIDebugger : Node
         PrintHelp();
     }
 
-    public override void _UnhandledKeyInput(InputEvent @event)
+    public override void _Input(InputEvent @event)
     {
         if (@event is InputEventKey { Pressed: true } keyEvent)
         {
             var key = keyEvent.Keycode;
+            bool handled = true;
             
             switch (key)
             {
+                // Ctrl+Shift+key combinations to avoid game conflicts
                 case Key.F1:
-                    PrintHelp();
+                    if (keyEvent.ShiftPressed)
+                        PrintHelp();
+                    else
+                        handled = false;
                     break;
                     
-                case Key.F2:
-                    CyclePolicy();
+                case Key.P:
+                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
+                        TogglePause();
+                    else
+                        handled = false;
                     break;
                     
-                case Key.F3:
-                    TogglePause();
+                case Key.M:
+                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
+                        ToggleManualMode();
+                    else
+                        handled = false;
                     break;
                     
-                case Key.F4:
-                    ToggleManualMode();
+                case Key.L:
+                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
+                        ToggleVerboseLogging();
+                    else
+                        handled = false;
                     break;
                     
-                case Key.F5:
-                    ToggleVerboseLogging();
+                case Key.C:
+                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
+                        CyclePolicy();
+                    else
+                        handled = false;
                     break;
                     
-                case Key.F9:
-                    ShowHistory();
+                case Key.H:
+                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
+                        ShowHistory();
+                    else
+                        handled = false;
                     break;
                     
-                // Number keys for rating (1-5)
+                // Number keys for rating (Ctrl+Shift+1-5)
                 case Key.Key1:
-                    RateLastAction(1);
+                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
+                        RateLastAction(1);
+                    else
+                        handled = false;
                     break;
                 case Key.Key2:
-                    RateLastAction(2);
+                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
+                        RateLastAction(2);
+                    else
+                        handled = false;
                     break;
                 case Key.Key3:
-                    RateLastAction(3);
+                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
+                        RateLastAction(3);
+                    else
+                        handled = false;
                     break;
                 case Key.Key4:
-                    RateLastAction(4);
+                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
+                        RateLastAction(4);
+                    else
+                        handled = false;
                     break;
                 case Key.Key5:
-                    RateLastAction(5);
+                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
+                        RateLastAction(5);
+                    else
+                        handled = false;
                     break;
                 case Key.Key0:
-                    RateLastAction(0);
+                    if (keyEvent.CtrlPressed && keyEvent.ShiftPressed)
+                        RateLastAction(0);
+                    else
+                        handled = false;
+                    break;
+                    
+                default:
+                    handled = false;
                     break;
             }
             
-            GetViewport().SetInputAsHandled();
+            if (handled)
+                GetViewport().SetInputAsHandled();
         }
     }
 
@@ -196,15 +239,15 @@ public partial class AIDebugger : Node
 
     private void PrintHelp()
     {
-        Log.Info("=== STS2 AI Bot - Hotkeys ===");
-        Log.Info("  F1 - Show this help");
-        Log.Info("  F2 - Cycle AI policy (Heuristic/Simulation/Random)");
-        Log.Info("  F3 - Toggle pause");
-        Log.Info("  F4 - Toggle manual mode");
-        Log.Info("  F5 - Toggle verbose logging");
-        Log.Info("  F9 - Show decision history");
-        Log.Info("  0-5 - Rate last action (0=poor, 5=excellent)");
-        Log.Info("================================");
+        Log.Info("=== STS2 AI Bot - Hotkeys (Ctrl+Shift+Key) ===");
+        Log.Info("  Shift+F1     - Show this help");
+        Log.Info("  Ctrl+Shift+P - Toggle pause");
+        Log.Info("  Ctrl+Shift+M - Toggle manual mode");
+        Log.Info("  Ctrl+Shift+L - Toggle verbose logging");
+        Log.Info("  Ctrl+Shift+C - Cycle AI policy");
+        Log.Info("  Ctrl+Shift+H - Show decision history");
+        Log.Info("  Ctrl+Shift+0-5 - Rate last action");
+        Log.Info("==============================================");
         Log.Info($"Current: {PolicyManager.Instance.GetStatusString()}");
     }
 
